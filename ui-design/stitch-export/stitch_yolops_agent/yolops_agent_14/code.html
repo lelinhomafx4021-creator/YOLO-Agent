@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>系统设置 - YOLOps-Agent</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "inverse-surface": "#303031",
+                "on-primary-container": "#521800",
+                "on-tertiary": "#ffffff",
+                "tertiary-container": "#0096fd",
+                "primary-container": "#ff5c00",
+                "on-error-container": "#93000a",
+                "inverse-on-surface": "#f2f0f0",
+                "secondary-container": "#e2dfde",
+                "on-surface-variant": "#5b4137",
+                "on-background": "#1b1c1c",
+                "surface-tint": "#a73a00",
+                "outline-variant": "#e4beb1",
+                "on-secondary-fixed-variant": "#474746",
+                "primary": "#a73a00",
+                "on-primary-fixed": "#370e00",
+                "error-container": "#ffdad6",
+                "on-tertiary-container": "#002d51",
+                "surface-container-lowest": "#ffffff",
+                "on-secondary-container": "#636262",
+                "surface-container": "#efeded",
+                "inverse-primary": "#ffb59a",
+                "surface-dim": "#dbdad9",
+                "error": "#ba1a1a",
+                "tertiary": "#0061a6",
+                "on-tertiary-fixed": "#001c37",
+                "primary-fixed": "#ffdbce",
+                "surface-container-highest": "#e3e2e2",
+                "secondary-fixed": "#e5e2e1",
+                "background": "#fbf9f9",
+                "on-secondary-fixed": "#1c1b1b",
+                "surface": "#fbf9f9",
+                "on-tertiary-fixed-variant": "#00497f",
+                "outline": "#8f7065",
+                "surface-bright": "#fbf9f9",
+                "primary-fixed-dim": "#ffb59a",
+                "on-error": "#ffffff",
+                "surface-container-high": "#e9e8e7",
+                "tertiary-fixed-dim": "#a0c9ff",
+                "on-secondary": "#ffffff",
+                "surface-variant": "#e3e2e2",
+                "surface-container-low": "#f5f3f3",
+                "on-surface": "#1b1c1c",
+                "on-primary-fixed-variant": "#802a00",
+                "on-primary": "#ffffff",
+                "tertiary-fixed": "#d2e4ff",
+                "secondary-fixed-dim": "#c8c6c5",
+                "secondary": "#5f5e5e"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "gutter": "16px",
+                "margin-desktop": "32px",
+                "sm": "8px",
+                "xs": "4px",
+                "base": "4px",
+                "lg": "24px",
+                "margin-mobile": "16px",
+                "xl": "40px",
+                "md": "16px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Geist"
+                ],
+                "headline-lg-mobile": [
+                        "Geist"
+                ],
+                "label-sm": [
+                        "JetBrains Mono"
+                ],
+                "body-sm": [
+                        "Geist"
+                ],
+                "body-md": [
+                        "Geist"
+                ],
+                "label-md": [
+                        "JetBrains Mono"
+                ],
+                "headline-lg": [
+                        "Geist"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-sm": [
+                        "10px",
+                        {
+                                "lineHeight": "14px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: theme('colors.surface'); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-variant'); 
+            border-radius: theme('borderRadius.full');
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline'); 
+        }
+
+        /* Ambient shadow for level 2 */
+        .shadow-ambient-lvl2 {
+            box-shadow: 0 4px 12px rgba(28, 25, 23, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased min-h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 fixed left-0 top-0 border-r border-surface-variant bg-surface-container-lowest flex flex-col p-lg z-20">
+<!-- Brand -->
+<div class="mb-lg flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary truncate">YOLOps-Agent</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">工业级目标检测平台</p>
+</div>
+</div>
+<!-- Navigation Items -->
+<div class="flex flex-col gap-xs flex-1 overflow-y-auto">
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>总览</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+<span>数据集管理</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="edit_note">edit_note</span>
+<span>标注工作台</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span>标注质检</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="model_training">model_training</span>
+<span>训练任务</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="package_2">package_2</span>
+<span>模型仓库</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span>AI 报告</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-body-md text-body-md opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined" data-icon="settings" data-weight="fill">settings</span>
+<span>系统设置</span>
+</a>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="h-16 fixed top-0 right-0 left-64 border-b border-surface-variant bg-surface-container-lowest flex items-center justify-between px-margin-desktop z-10">
+<!-- Left Side: Product Name / Context -->
+<div class="flex items-center gap-md">
+<span class="font-headline-md text-headline-md font-bold text-on-surface">安全帽检测 / v003</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm opacity-50 px-2">|</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">系统设置</span>
+</div>
+<!-- Right Side: Actions -->
+<div class="flex items-center gap-md">
+<div class="hidden lg:flex items-center gap-xs text-on-surface-variant bg-surface-container-lowest px-3 py-1.5 rounded-full border border-surface-variant">
+<span class="material-symbols-outlined text-[16px]" data-icon="memory">memory</span>
+<span class="font-body-sm text-body-sm">GPU：RTX 4060 · 空闲</span>
+</div>
+<button class="bg-primary-container text-white px-4 py-2 rounded-lg font-body-sm text-body-sm hover:opacity-90 transition-opacity flex items-center gap-xs shadow-ambient-lvl2">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span>
+                新建训练任务
+            </button>
+<div class="flex items-center gap-xs border-l border-surface-variant pl-md ml-sm">
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<button class="w-8 h-8 rounded-full ml-xs overflow-hidden border border-surface-variant hover:border-primary transition-colors">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A small, professional headshot of an Asian male software engineer in his late 20s. He is wearing a clean, minimalist white t-shirt and has neat, short black hair. The background is a soft, warm neutral studio backdrop (#FAFAF9) with subtle, high-key lighting. The style is modern, approachable, and corporate." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0ym2RbdrwvUM5lDHN_rvHN_eVueG4rY7wwRz2C9zLoZcV70SCqt1Pyr-dFrX4t5OrGk6l-SXrAChbrQJ4m9QO-TkJZ6f71mDI9pvOUQQyNCCt3od2nc8X12NQdmGFTEWbm1x1R1Y3hMUsv2-Wcq1dy3zW4Qspb71wZbIou58X5erEU52Xrtjv0jw00duWgJiB0LrY3JXeTpflCVGe8O8VQ9ZJjgpiMYee80diInuawLSFDtaFJC39LPUf6oRrm6xSy92X9f54aie0"/>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 mt-16 p-margin-desktop w-full overflow-y-auto bg-surface-container-lowest h-[calc(100vh-64px)]">
+<div class="max-w-4xl mx-auto space-y-lg pb-12">
+<!-- Header Section -->
+<div class="flex items-end justify-between mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-xs">系统设置</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">管理工作区路径、默认训练参数及AI代理配置。</p>
+</div>
+<button class="bg-primary-container text-white px-6 py-2.5 rounded-lg font-body-md text-body-md hover:opacity-90 transition-opacity shadow-ambient-lvl2 flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="save">save</span>
+                    保存所有更改
+                </button>
+</div>
+<!-- Bento Layout for Settings -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+<!-- Group 1: Workspace Paths (Span 12) -->
+<section class="xl:col-span-12 bg-white rounded-xl border border-surface-variant shadow-ambient-lvl2 overflow-hidden">
+<div class="px-6 py-4 border-b border-surface-variant bg-white flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="folder_managed">folder_managed</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">工作区路径</h3>
+</div>
+<div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">数据集目录</label>
+<div class="flex">
+<span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-surface-variant bg-surface-container-lowest text-on-surface-variant text-body-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="hard_drive">hard_drive</span>
+</span>
+<input class="flex-1 block w-full rounded-none rounded-r-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="text" value="/mnt/data/yolo_datasets"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">训练输出目录</label>
+<div class="flex">
+<span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-surface-variant bg-surface-container-lowest text-on-surface-variant text-body-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="output">output</span>
+</span>
+<input class="flex-1 block w-full rounded-none rounded-r-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="text" value="/mnt/data/yolo_runs"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">模型仓库目录</label>
+<div class="flex">
+<span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-surface-variant bg-surface-container-lowest text-on-surface-variant text-body-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="inventory_2">inventory_2</span>
+</span>
+<input class="flex-1 block w-full rounded-none rounded-r-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="text" value="/mnt/data/models/weights"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">SQLite 数据库</label>
+<div class="flex">
+<span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-surface-variant bg-surface-container-lowest text-on-surface-variant text-body-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="storage">storage</span>
+</span>
+<input class="flex-1 block w-full rounded-none rounded-r-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="text" value="/opt/yolops/app.db"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Group 2: YOLO Default Params (Span 7) -->
+<section class="xl:col-span-7 bg-white rounded-xl border border-surface-variant shadow-ambient-lvl2 overflow-hidden flex flex-col">
+<div class="px-6 py-4 border-b border-surface-variant bg-white flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="tune">tune</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">YOLO 默认参数</h3>
+</div>
+<div class="p-6 flex-1 space-y-5">
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">默认基础模型</label>
+<select class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]">
+<option selected="" value="yolo11n.pt">yolo11n.pt</option>
+<option value="yolo11s.pt">yolo11s.pt</option>
+<option value="yolo11m.pt">yolo11m.pt</option>
+<option value="yolov8n.pt">yolov8n.pt</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">默认 imgsz</label>
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px] font-label-sm text-label-sm" type="number" value="640"/>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">默认 epochs</label>
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px] font-label-sm text-label-sm" type="number" value="100"/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">默认 batch</label>
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px] font-label-sm text-label-sm" type="number" value="16"/>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface flex items-center justify-between">
+<span>置信度阈值 (conf)</span>
+<span class="text-primary font-label-sm text-label-sm" id="conf-val">0.25</span>
+</label>
+<input class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary" max="1" min="0" oninput="document.getElementById('conf-val').textContent = this.value" step="0.01" type="range" value="0.25"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Group 3: AI Agent (Span 5) -->
+<section class="xl:col-span-5 bg-white rounded-xl border border-surface-variant shadow-ambient-lvl2 overflow-hidden flex flex-col relative">
+<!-- Subtle background decoration -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none"></div>
+<div class="px-6 py-4 border-b border-surface-variant bg-white flex items-center gap-3 relative z-10">
+<span class="material-symbols-outlined text-primary" data-icon="smart_toy">smart_toy</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">AI Agent</h3>
+</div>
+<div class="p-6 flex-1 space-y-5 relative z-10">
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">分析模式</label>
+<div class="flex rounded-lg shadow-sm">
+<button class="flex-1 inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-l-lg border border-surface-variant bg-white text-on-surface hover:bg-surface-container-low" type="button">规则分析</button>
+<button class="flex-1 inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-r-lg border border-l-0 border-primary bg-primary-container text-white" type="button">LLM辅助</button>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">API 类型</label>
+<select class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]">
+<option selected="" value="deepseek">DeepSeek</option>
+<option value="openai">OpenAI</option>
+<option value="anthropic">Anthropic</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">API Base URL</label>
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="url" value="https://api.deepseek.com/v1"/>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">模型名称</label>
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px]" type="text" value="deepseek-coder"/>
+</div>
+<div class="space-y-2">
+<label class="block font-body-sm text-body-sm font-medium text-on-surface">API Key</label>
+<div class="relative">
+<input class="block w-full rounded-lg border-surface-variant bg-white text-on-surface focus:border-primary focus:ring focus:ring-primary/10 sm:text-sm h-[38px] pr-10 font-label-sm text-label-sm" type="password" value="sk-1234567890abcdef1234567890abcdef"/>
+<button class="absolute inset-y-0 right-0 px-3 flex items-center text-on-surface-variant hover:text-primary" type="button">
+<span class="material-symbols-outlined text-[18px]" data-icon="visibility_off">visibility_off</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Group 4: Storage & Backup (Span 12) -->
+<section class="xl:col-span-12 bg-white rounded-xl border border-surface-variant shadow-ambient-lvl2 overflow-hidden">
+<div class="px-6 py-4 border-b border-surface-variant bg-white flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="cloud_sync">cloud_sync</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">存储与备份</h3>
+</div>
+<div class="p-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+<button class="flex flex-col items-start gap-2 p-4 bg-white border border-surface-variant rounded-lg hover:border-primary hover:shadow-ambient-lvl2 transition-all text-left group">
+<span class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+</span>
+<div>
+<span class="block font-body-md text-body-md font-medium text-on-surface">导出元数据</span>
+<span class="block font-body-sm text-body-sm text-on-surface-variant mt-1">导出数据库及配置JSON</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-2 p-4 bg-white border border-surface-variant rounded-lg hover:border-primary hover:shadow-ambient-lvl2 transition-all text-left group">
+<span class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="backup">backup</span>
+</span>
+<div>
+<span class="block font-body-md text-body-md font-medium text-on-surface">备份工作区</span>
+<span class="block font-body-sm text-body-sm text-on-surface-variant mt-1">打包压缩整个工作目录</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-2 p-4 bg-white border border-surface-variant rounded-lg hover:border-error hover:shadow-ambient-lvl2 transition-all text-left group">
+<span class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:bg-error-container group-hover:text-error transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="delete_sweep">delete_sweep</span>
+</span>
+<div>
+<span class="block font-body-md text-body-md font-medium text-on-surface">清理失败任务</span>
+<span class="block font-body-sm text-body-sm text-on-surface-variant mt-1">释放无效的 runs 缓存目录</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-2 p-4 bg-white border border-surface-variant rounded-lg hover:border-primary hover:shadow-ambient-lvl2 transition-all text-left group">
+<span class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="health_and_safety">health_and_safety</span>
+</span>
+<div>
+<span class="block font-body-md text-body-md font-medium text-on-surface">检查模型仓库</span>
+<span class="block font-body-sm text-body-sm text-on-surface-variant mt-1">验证权重文件完整性</span>
+</div>
+</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>YOLOps-Agent 总览</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "inverse-surface": "#303031",
+                "on-primary-container": "#521800",
+                "on-tertiary": "#ffffff",
+                "tertiary-container": "#0096fd",
+                "primary-container": "#ff5c00",
+                "on-error-container": "#93000a",
+                "inverse-on-surface": "#f2f0f0",
+                "secondary-container": "#e2dfde",
+                "on-surface-variant": "#5b4137",
+                "on-background": "#1b1c1c",
+                "surface-tint": "#a73a00",
+                "outline-variant": "#e4beb1",
+                "on-secondary-fixed-variant": "#474746",
+                "primary": "#a73a00",
+                "on-primary-fixed": "#370e00",
+                "error-container": "#ffdad6",
+                "on-tertiary-container": "#002d51",
+                "surface-container-lowest": "#ffffff",
+                "on-secondary-container": "#636262",
+                "surface-container": "#efeded",
+                "inverse-primary": "#ffb59a",
+                "surface-dim": "#dbdad9",
+                "error": "#ba1a1a",
+                "tertiary": "#0061a6",
+                "on-tertiary-fixed": "#001c37",
+                "primary-fixed": "#ffdbce",
+                "surface-container-highest": "#e3e2e2",
+                "secondary-fixed": "#e5e2e1",
+                "background": "#fbf9f9",
+                "on-secondary-fixed": "#1c1b1b",
+                "surface": "#fbf9f9",
+                "on-tertiary-fixed-variant": "#00497f",
+                "outline": "#8f7065",
+                "surface-bright": "#fbf9f9",
+                "primary-fixed-dim": "#ffb59a",
+                "on-error": "#ffffff",
+                "surface-container-high": "#e9e8e7",
+                "tertiary-fixed-dim": "#a0c9ff",
+                "on-secondary": "#ffffff",
+                "surface-variant": "#e3e2e2",
+                "surface-container-low": "#f5f3f3",
+                "on-surface": "#1b1c1c",
+                "on-primary-fixed-variant": "#802a00",
+                "on-primary": "#ffffff",
+                "tertiary-fixed": "#d2e4ff",
+                "secondary-fixed-dim": "#c8c6c5",
+                "secondary": "#5f5e5e"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "gutter": "16px",
+                "margin-desktop": "32px",
+                "sm": "8px",
+                "xs": "4px",
+                "base": "4px",
+                "lg": "24px",
+                "margin-mobile": "16px",
+                "xl": "40px",
+                "md": "16px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Geist"
+                ],
+                "headline-lg-mobile": [
+                        "Geist"
+                ],
+                "label-sm": [
+                        "JetBrains Mono"
+                ],
+                "body-sm": [
+                        "Geist"
+                ],
+                "body-md": [
+                        "Geist"
+                ],
+                "label-md": [
+                        "JetBrains Mono"
+                ],
+                "headline-lg": [
+                        "Geist"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-sm": [
+                        "10px",
+                        {
+                                "lineHeight": "14px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom Scrollbar for inner tables if needed */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e4beb1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #8f7065; 
+        }
+    </style>
+</head>
+<body class="bg-white text-on-background font-body-md text-body-md antialiased min-h-screen">
+<!-- SideNavBar -->
+<nav class="bg-white h-screen w-64 fixed left-0 top-0 border-r border-outline-variant flex flex-col h-full p-lg z-20">
+<!-- Brand Header -->
+<div class="flex flex-col gap-base mb-lg">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">YOLOps-Agent</h1>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase">工业级目标检测平台</p>
+</div>
+<!-- Navigation Tabs -->
+<div class="flex flex-col gap-base flex-1">
+<!-- Active Tab -->
+<a class="flex items-center gap-md px-4 py-3 bg-surface-container text-primary rounded-lg font-headline-md text-headline-md transition-opacity" href="#">
+<span class="material-symbols-outlined icon-fill">dashboard</span>
+<span>总览</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">database</span>
+<span>数据集管理</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">edit_note</span>
+<span>标注工作台</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+<span>标注质检</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">model_training</span>
+<span>训练任务</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">package_2</span>
+<span>模型仓库</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">assessment</span>
+<span>AI 报告</span>
+</a>
+<div class="mt-auto">
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors hover:bg-surface-container-highest transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>系统设置</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="bg-white h-16 fixed top-0 right-0 left-64 border-b border-outline-variant flex items-center justify-between px-margin-desktop w-[calc(100%-16rem)] z-10 bg-opacity-95 backdrop-blur-sm">
+<!-- Left Section: Context & Search -->
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-sm bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant cursor-pointer hover:bg-surface-container-highest transition-colors">
+<div class="w-6 h-6 rounded bg-surface-container text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">construction</span>
+</div>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">安全帽检测 / v003</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">expand_more</span>
+</div>
+<!-- Search Bar -->
+<div class="relative hidden lg:block w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-full py-1.5 pl-9 pr-4 text-body-sm font-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-outline" placeholder="搜索任务、数据集..." type="text"/>
+</div>
+</div>
+<!-- Right Section: Status & Actions -->
+<div class="flex items-center gap-md">
+<!-- Status Badge -->
+<div class="flex items-center gap-2 px-3 py-1 bg-surface-container border border-outline-variant rounded-full">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">GPU：RTX 4060 · 空闲</span>
+</div>
+<!-- Primary Action -->
+<button class="bg-primary hover:bg-surface-tint text-on-primary px-4 py-1.5 rounded-lg font-body-sm text-body-sm transition-colors flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                新建训练任务
+            </button>
+<!-- Icon Actions -->
+<div class="flex items-center gap-1 border-l border-outline-variant pl-md ml-sm">
+<button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors rounded-full flex items-center justify-center relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="ml-2 w-8 h-8 rounded-full border border-outline-variant overflow-hidden cursor-pointer">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A clean, professional headshot of an engineer in a bright, modern office setting. Light mode aesthetic, warm tones, high quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1UrDy8UlfC_8qVW05C6WyoCUGoJzafIya_MBrYuw3XPln6KfGyRmeyF1iBCh-7dtUsfHmvCUdfhSAQw0YDITu0vsQVUSWpx78BLJ9qeO5KyYBR8FYG7g_ezvFRJhMUmuV08aAGHDRT1JdjtVnztBqwg5uhrJlT5Bz8DNu2MJp8ib4v8B4KO9rBLbKwqhIhLvifH-FVK0vTAmr8ZcYvpK02S3OCvGimzt6WfsaqfxTeJ6dhAEgz40vn9zvnAoUmuBcXp_ZAwddzszV"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 mt-16 p-margin-desktop pb-24">
+<div class="max-w-[1440px] mx-auto">
+<!-- Page Header -->
+<div class="mb-lg">
+<h2 class="font-headline-lg text-headline-lg text-on-background">YOLOps-Agent</h2>
+<p class="font-headline-md text-headline-md text-on-surface-variant mt-base">工业目标检测数据集管理、训练归档与 AI 复盘平台</p>
+</div>
+<!-- Metric Cards (5 cols) -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-gutter mb-lg">
+<!-- Card 1 -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between shadow-[0_4px_12px_rgba(28,25,23,0.02)] hover:shadow-[0_4px_12px_rgba(28,25,23,0.05)] transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="font-body-md text-body-md text-on-surface-variant">数据集数量</span>
+<span class="material-symbols-outlined text-outline">database</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-background">4</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between shadow-[0_4px_12px_rgba(28,25,23,0.02)] hover:shadow-[0_4px_12px_rgba(28,25,23,0.05)] transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="font-body-md text-body-md text-on-surface-variant">图片总数</span>
+<span class="material-symbols-outlined text-outline">image</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-background">12,480</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between shadow-[0_4px_12px_rgba(28,25,23,0.02)] hover:shadow-[0_4px_12px_rgba(28,25,23,0.05)] transition-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-error"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="font-body-md text-body-md text-on-surface-variant">标注问题</span>
+<span class="material-symbols-outlined text-error opacity-80">warning</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-error">137</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between shadow-[0_4px_12px_rgba(28,25,23,0.02)] hover:shadow-[0_4px_12px_rgba(28,25,23,0.05)] transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="font-body-md text-body-md text-on-surface-variant">训练任务</span>
+<span class="material-symbols-outlined text-outline">model_training</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-background">28</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between shadow-[0_4px_12px_rgba(28,25,23,0.02)] hover:shadow-[0_4px_12px_rgba(28,25,23,0.05)] transition-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="font-body-md text-body-md text-on-surface-variant">最佳 mAP50</span>
+<span class="material-symbols-outlined text-primary opacity-80">military_tech</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-primary">0.914</div>
+</div>
+</div>
+<!-- Middle Section: Chart & Summary -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter mb-lg">
+<!-- Left Chart Card (Span 8) -->
+<div class="col-span-1 lg:col-span-8 bg-white border border-outline-variant rounded-xl shadow-[0_4px_12px_rgba(28,25,23,0.02)] flex flex-col">
+<div class="p-md border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-background font-medium">最近训练表现</h3>
+<div class="flex gap-4">
+<div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-primary"></div><span class="font-label-md text-label-md text-on-surface-variant uppercase">mAP50</span></div>
+<div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-tertiary"></div><span class="font-label-md text-label-md text-on-surface-variant uppercase">mAP50-95</span></div>
+</div>
+</div>
+<!-- Chart Area (Decorative SVG) -->
+<div class="p-md flex-1 min-h-[240px] relative w-full flex items-end">
+<!-- Grid Lines -->
+<div class="absolute inset-x-md inset-y-md flex flex-col justify-between pointer-events-none opacity-20">
+<div class="border-t border-outline-variant w-full"></div>
+<div class="border-t border-outline-variant w-full"></div>
+<div class="border-t border-outline-variant w-full"></div>
+<div class="border-t border-outline-variant w-full"></div>
+</div>
+<svg class="w-full h-[200px]" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- mAP50-95 Line (Tertiary) -->
+<path class="stroke-tertiary opacity-50" d="M 0,90 Q 20,85 40,70 T 80,40 T 100,35" fill="none" stroke-linecap="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+<!-- mAP50 Line (Primary) -->
+<path class="stroke-primary" d="M 0,80 Q 15,60 30,30 T 70,15 T 100,10" fill="none" stroke-linecap="round" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+<!-- Points -->
+<circle class="fill-white stroke-primary" cx="70" cy="15" r="1.5" stroke-width="1.5" vector-effect="non-scaling-stroke"></circle>
+<circle class="fill-white stroke-primary" cx="100" cy="10" r="1.5" stroke-width="1.5" vector-effect="non-scaling-stroke"></circle>
+</svg>
+</div>
+<div class="bg-surface-container-low p-sm px-md rounded-b-xl border-t border-outline-variant flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">memory</span>
+<span>当前训练任务: <span class="font-label-sm text-on-background font-medium">train_20260623_103000</span></span>
+</div>
+<div class="flex gap-2">
+<span class="bg-tertiary text-white px-2 py-0.5 rounded text-[11px] font-label-md uppercase border border-tertiary">已完成</span>
+<span class="bg-white text-on-surface px-2 py-0.5 rounded text-[11px] font-label-md uppercase border border-outline-variant">yolo11n</span>
+<span class="bg-white text-on-surface px-2 py-0.5 rounded text-[11px] font-label-md uppercase border border-outline-variant">100 epochs</span>
+</div>
+</div>
+</div>
+<!-- Right Summary Card (Span 4) -->
+<div class="col-span-1 lg:col-span-4 bg-white border border-outline-variant rounded-xl shadow-[0_4px_12px_rgba(28,25,23,0.02)] flex flex-col">
+<div class="p-md border-b border-outline-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">auto_awesome</span>
+<h3 class="font-headline-md text-headline-md text-on-background font-medium">AI 训练复盘摘要</h3>
+</div>
+<div class="p-md flex-1 flex flex-col gap-md">
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                            本次训练 Precision 高于 Recall，模型偏保守，可能漏检未戴安全帽样本。建议下一轮补充 <code class="font-label-sm bg-surface-container px-1 py-0.5 rounded text-on-background">no_helmet</code> 类别样本，并复查低置信度预测。
+                        </p>
+<div class="mt-auto">
+<h4 class="font-label-md text-label-md text-on-surface mb-2 uppercase">行动建议</h4>
+<ul class="flex flex-col gap-2">
+<li class="flex items-start gap-2 bg-surface-container-low p-2 rounded border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">add_circle</span>
+<span class="font-body-sm text-body-sm text-on-surface">补充 no_helmet 样本</span>
+</li>
+<li class="flex items-start gap-2 bg-surface-container-low p-2 rounded border border-outline-variant">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">plumbing</span>
+<span class="font-body-sm text-body-sm text-on-surface">复查 23 个低置信度预测</span>
+</li>
+<li class="flex items-start gap-2 bg-surface-container-low p-2 rounded border border-outline-variant">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">bug_report</span>
+<span class="font-body-sm text-body-sm text-on-surface">修复 7 个异常 bbox 标注</span>
+</li>
+<li class="flex items-start gap-2 bg-surface-container-low p-2 rounded border border-outline-variant">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">model_training</span>
+<span class="font-body-sm text-body-sm text-on-surface">对未标注图片执行 AI 预标注</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Section: Tables -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+<!-- Left Table: Datasets -->
+<div class="bg-white border border-outline-variant rounded-xl shadow-[0_4px_12px_rgba(28,25,23,0.02)] overflow-hidden flex flex-col">
+<div class="p-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low/50">
+<h3 class="font-headline-md text-headline-md text-on-background font-medium">最近数据集版本</h3>
+<button class="text-primary hover:text-surface-tint font-body-sm text-body-sm font-medium flex items-center gap-1 transition-colors">
+                            查看全部 <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-sm text-body-sm">
+<thead class="bg-white text-on-surface-variant font-label-md text-label-md uppercase border-b border-outline-variant">
+<tr>
+<th class="px-4 py-3 font-medium">数据集</th>
+<th class="px-4 py-3 font-medium">版本</th>
+<th class="px-4 py-3 font-medium">图片数</th>
+<th class="px-4 py-3 font-medium">健康度</th>
+<th class="px-4 py-3 font-medium text-right">更新时间</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-on-background font-medium">site_cam_01</td>
+<td class="px-4 py-3 font-label-sm text-on-surface-variant">v3.2</td>
+<td class="px-4 py-3 text-on-surface-variant">5,200</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-full bg-surface-variant rounded-full h-1.5 max-w-[60px]">
+<div class="bg-tertiary h-1.5 rounded-full" style="width: 95%"></div>
+</div>
+<span class="text-[12px] text-tertiary">95%</span>
+</div>
+</td>
+<td class="px-4 py-3 text-on-surface-variant text-right">2小时前</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-on-background font-medium">drone_view_raw</td>
+<td class="px-4 py-3 font-label-sm text-on-surface-variant">v1.0</td>
+<td class="px-4 py-3 text-on-surface-variant">3,140</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-full bg-surface-variant rounded-full h-1.5 max-w-[60px]">
+<div class="bg-primary h-1.5 rounded-full" style="width: 78%"></div>
+</div>
+<span class="text-[12px] text-primary">78%</span>
+</div>
+</td>
+<td class="px-4 py-3 text-on-surface-variant text-right">昨天</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-on-background font-medium">night_vision_test</td>
+<td class="px-4 py-3 font-label-sm text-on-surface-variant">v2.1</td>
+<td class="px-4 py-3 text-on-surface-variant">4,140</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-full bg-surface-variant rounded-full h-1.5 max-w-[60px]">
+<div class="bg-error h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+<span class="text-[12px] text-error">45%</span>
+</div>
+</td>
+<td class="px-4 py-3 text-on-surface-variant text-right">3天前</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Table: Models -->
+<div class="bg-white border border-outline-variant rounded-xl shadow-[0_4px_12px_rgba(28,25,23,0.02)] overflow-hidden flex flex-col">
+<div class="p-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low/50">
+<h3 class="font-headline-md text-headline-md text-on-background font-medium">最近模型版本</h3>
+<button class="text-primary hover:text-surface-tint font-body-sm text-body-sm font-medium flex items-center gap-1 transition-colors">
+                            管理模型 <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-sm text-body-sm">
+<thead class="bg-white text-on-surface-variant font-label-md text-label-md uppercase border-b border-outline-variant">
+<tr>
+<th class="px-4 py-3 font-medium">模型 ID</th>
+<th class="px-4 py-3 font-medium">数据集版本</th>
+<th class="px-4 py-3 font-medium">mAP50</th>
+<th class="px-4 py-3 font-medium">状态</th>
+<th class="px-4 py-3 font-medium text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 font-label-sm text-on-background font-medium">yolo_h_v3.pt</td>
+<td class="px-4 py-3 text-on-surface-variant">v3.2</td>
+<td class="px-4 py-3 font-label-sm text-primary">0.914</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-label-md uppercase bg-tertiary text-white border border-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-white"></span> 生产环境
+                                        </span>
+</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">more_horiz</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 font-label-sm text-on-background font-medium">yolo_h_v2_exp.pt</td>
+<td class="px-4 py-3 text-on-surface-variant">v3.1</td>
+<td class="px-4 py-3 font-label-sm text-on-surface-variant">0.892</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-label-md uppercase bg-white text-on-surface border border-outline-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span> 归档
+                                        </span>
+</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">more_horiz</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 font-label-sm text-on-background font-medium">yolo_n_edge.onnx</td>
+<td class="px-4 py-3 text-on-surface-variant">v3.2</td>
+<td class="px-4 py-3 font-label-sm text-on-surface-variant">0.845</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-label-md uppercase bg-secondary text-white border border-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-white"></span> 边缘部署
+                                        </span>
+</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">more_horiz</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

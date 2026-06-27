@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>训练任务 - YOLOps-Agent</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#e0c0b1",
+                      "on-surface-variant": "#584237",
+                      "primary-fixed-dim": "#ffb690",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#1e1b19",
+                      "surface-container-high": "#eee7e3",
+                      "surface-tint": "#9d4300",
+                      "surface-dim": "#e0d8d5",
+                      "on-primary-fixed-variant": "#783200",
+                      "on-primary-fixed": "#341100",
+                      "on-secondary": "#ffffff",
+                      "secondary": "#665f3d",
+                      "on-tertiary-container": "#1c372a",
+                      "surface-container-highest": "#e9e1dd",
+                      "tertiary": "#486554",
+                      "on-error": "#ffffff",
+                      "on-primary-container": "#582200",
+                      "on-surface": "#1e1b19",
+                      "secondary-fixed": "#ede3b8",
+                      "on-tertiary-fixed": "#042014",
+                      "error-container": "#ffdad6",
+                      "inverse-primary": "#ffb690",
+                      "on-primary": "#ffffff",
+                      "tertiary-fixed-dim": "#afceba",
+                      "error": "#ba1a1a",
+                      "on-tertiary-fixed-variant": "#314d3e",
+                      "tertiary-container": "#83a18f",
+                      "outline": "#8c7164",
+                      "surface-container": "#f4ece8",
+                      "background": "#fff8f5",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary-fixed-dim": "#d1c79d",
+                      "surface-container-low": "#faf2ee",
+                      "secondary-container": "#eae0b5",
+                      "surface": "#fff8f5",
+                      "on-secondary-fixed-variant": "#4d4727",
+                      "on-secondary-fixed": "#201c02",
+                      "on-secondary-container": "#6a6341",
+                      "inverse-on-surface": "#f7efeb",
+                      "tertiary-fixed": "#caead6",
+                      "on-error-container": "#93000a",
+                      "inverse-surface": "#33302d",
+                      "surface-bright": "#fff8f5",
+                      "primary": "#9d4300",
+                      "surface-variant": "#e9e1dd",
+                      "primary-container": "#f97316",
+                      "primary-fixed": "#ffdbca"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "container-max": "1440px",
+                      "gutter": "24px",
+                      "margin-page": "32px",
+                      "stack-sm": "8px",
+                      "unit": "4px",
+                      "stack-md": "16px",
+                      "stack-lg": "24px"
+              },
+              "fontFamily": {
+                      "label-caps": [
+                              "Geist"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "body-base": [
+                              "Inter"
+                      ],
+                      "title-sm": [
+                              "Inter"
+                      ],
+                      "mono-data": [
+                              "Geist"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-base": [
+                              "14px",
+                              {
+                                      "lineHeight": "22px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "mono-data": [
+                              "13px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased font-body-base overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface border-r border-outline-variant h-screen w-64 fixed left-0 top-0 z-20 flex flex-col h-full p-stack-lg">
+<div class="flex items-center gap-stack-sm mb-stack-lg">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold">Y</div>
+<div class="flex flex-col">
+<span class="font-display-lg text-display-lg font-bold text-primary">YOLOps-Agent</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">工业级目标检测平台</span>
+</div>
+</div>
+<div class="flex flex-col gap-stack-sm flex-1">
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                总览
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+                数据集管理
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="edit_note">edit_note</span>
+                标注工作台
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+                标注质检
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-title-sm text-title-sm opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined fill" data-icon="model_training">model_training</span>
+                训练任务
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="package_2">package_2</span>
+                模型仓库
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+                AI 报告
+            </a>
+<a class="flex items-center gap-stack-md px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all rounded-lg font-body-base text-body-base mt-auto" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                系统设置
+            </a>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="bg-surface h-16 fixed top-0 right-0 left-64 z-10 flex items-center justify-between px-margin-page w-full border-b border-outline-variant">
+<div class="flex items-center gap-stack-md">
+<span class="font-title-sm text-title-sm font-bold text-on-surface">安全帽检测 / v003</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant bg-surface-container px-2 py-1 rounded">训练中</span>
+</div>
+<div class="flex items-center gap-stack-md">
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-primary" data-icon="memory">memory</span>
+                GPU：RTX 4060 · 空闲
+            </span>
+<div class="w-px h-6 bg-outline-variant mx-stack-sm"></div>
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<button class="bg-primary-container text-on-primary font-body-sm text-body-sm px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity ml-stack-sm flex items-center gap-stack-sm">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                新建训练任务
+            </button>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-outline-variant ml-stack-sm object-cover" data-alt="A small circular avatar placeholder image showing a generic user profile icon in a modern, light-themed web interface setting. The image should be clean and minimalist, suitable for a professional MLOps dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeamZTq328_nCfrx4zYJd5u5xCBUgZ8BsMaALmXZmyOfRb5xvjJ2TQjEmo5tOK7AROsbnhomoLIKrE0kBocfPcLeTHd_lkEbY9JSJ2rEEUiPXjDQWxWF5-_ZM6kSAkzE7c2eiz3O_o6j6AuJstEkeH20uafcPFS8aIMwXkzXPAAn3tcegAknheaZG4OpT4FN80oSgOeBa7QWAh8LxwsQpaCc13ZLsI8a7uaeb0byg-kqch-eXQmjHnHRBNm2bR3-QNoT1t2hgSEIrq"/>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-64 mt-16 p-margin-page h-[calc(100vh-4rem)] overflow-y-auto flex gap-gutter">
+<!-- Left Pane: Configuration Form (320px) -->
+<aside class="w-[320px] flex-shrink-0 flex flex-col gap-stack-md">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_12px_rgba(28,25,23,0.05)]">
+<h2 class="font-title-sm text-title-sm text-on-surface border-b border-outline-variant pb-stack-sm mb-stack-md">新建训练任务</h2>
+<form class="flex flex-col gap-stack-md">
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">Run Name</label>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" type="text" value="train_20260623_103000"/>
+</div>
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">数据集版本</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-body-sm text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
+<option>安全帽检测 / v003</option>
+</select>
+</div>
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">基础模型</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-body-sm text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
+<option>yolo11n.pt</option>
+<option>yolo11s.pt</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-stack-sm">
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">Epochs</label>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" type="number" value="100"/>
+</div>
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">imgsz</label>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" type="number" value="640"/>
+</div>
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">Batch Size</label>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" type="number" value="16"/>
+</div>
+<div class="flex flex-col gap-unit">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">Patience</label>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" type="number" value="30"/>
+</div>
+</div>
+<div class="flex flex-col gap-unit mb-stack-md">
+<label class="font-body-sm text-body-sm font-medium text-on-surface-variant">Device</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-mono-data text-mono-data text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
+<option>cuda:0</option>
+<option>cpu</option>
+</select>
+</div>
+<button class="w-full bg-primary-container text-on-primary font-body-base text-body-base py-3 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center items-center gap-stack-sm" type="button">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+                        开始训练
+                    </button>
+</form>
+</div>
+</aside>
+<!-- Right Pane: Task List & Details -->
+<div class="flex-1 flex flex-col gap-stack-md overflow-hidden">
+<!-- Tabs & Header -->
+<div class="flex items-center gap-stack-lg border-b border-outline-variant pb-stack-sm">
+<h1 class="font-headline-md text-headline-md text-on-surface font-semibold mr-auto">训练任务管理</h1>
+<div class="flex gap-stack-sm">
+<button class="px-4 py-2 font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface transition-colors">运行中 <span class="bg-surface-container px-2 py-0.5 rounded-full text-label-caps ml-1">1</span></button>
+<button class="px-4 py-2 font-title-sm text-title-sm text-primary border-b-2 border-primary font-medium">已完成 <span class="bg-surface-container px-2 py-0.5 rounded-full text-label-caps ml-1">12</span></button>
+<button class="px-4 py-2 font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface transition-colors">失败 <span class="bg-surface-container px-2 py-0.5 rounded-full text-label-caps ml-1">2</span></button>
+</div>
+</div>
+<!-- Content Area: Bento Grid Layout for Details -->
+<div class="grid grid-cols-12 gap-gutter h-full overflow-y-auto pb-margin-page">
+<!-- Main Detail View (Top) -->
+<div class="col-span-12 bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_12px_rgba(28,25,23,0.05)] flex flex-col">
+<div class="flex justify-between items-start mb-stack-md border-b border-outline-variant pb-stack-md">
+<div>
+<div class="flex items-center gap-stack-sm mb-unit">
+<h3 class="font-title-sm text-title-sm font-semibold text-on-surface">train_20260622_150000</h3>
+<span class="font-label-caps text-label-caps bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded uppercase">已完成</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">基于 yolo11n.pt · 数据集 v003</p>
+</div>
+<div class="flex gap-stack-md text-right">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">进度</span>
+<span class="font-mono-data text-mono-data text-on-surface font-medium">100/100 Epochs</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">耗时</span>
+<span class="font-mono-data text-mono-data text-on-surface font-medium">42m 18s</span>
+</div>
+<button class="ml-stack-md text-primary hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+<!-- Metrics Mini-Charts Row -->
+<div class="grid grid-cols-4 gap-stack-md mb-stack-lg">
+<div class="bg-surface-container rounded-lg p-stack-sm border border-outline-variant/50">
+<span class="font-label-caps text-label-caps text-on-surface-variant block mb-1">mAP50</span>
+<div class="flex items-end justify-between">
+<span class="font-title-sm text-title-sm text-primary font-bold">0.924</span>
+<div class="w-16 h-8 bg-gradient-to-t from-primary/10 to-transparent border-b-2 border-primary"></div>
+</div>
+</div>
+<div class="bg-surface-container rounded-lg p-stack-sm border border-outline-variant/50">
+<span class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Recall</span>
+<div class="flex items-end justify-between">
+<span class="font-title-sm text-title-sm text-primary font-bold">0.891</span>
+<div class="w-16 h-8 bg-gradient-to-t from-primary/10 to-transparent border-b-2 border-primary"></div>
+</div>
+</div>
+<div class="bg-surface-container rounded-lg p-stack-sm border border-outline-variant/50">
+<span class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Train Loss</span>
+<div class="flex items-end justify-between">
+<span class="font-title-sm text-title-sm text-on-surface font-bold">1.245</span>
+<div class="w-16 h-8 border-b-2 border-on-surface-variant" style="border-bottom-style: dashed;"></div>
+</div>
+</div>
+<div class="bg-surface-container rounded-lg p-stack-sm border border-outline-variant/50">
+<span class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Val Loss</span>
+<div class="flex items-end justify-between">
+<span class="font-title-sm text-title-sm text-on-surface font-bold">1.312</span>
+<div class="w-16 h-8 border-b-2 border-on-surface-variant" style="border-bottom-style: dashed;"></div>
+</div>
+</div>
+</div>
+<!-- Terminal / Logs -->
+<div class="flex-1 bg-[#1E1E1E] rounded-lg p-stack-md overflow-hidden flex flex-col min-h-[200px]">
+<div class="flex justify-between items-center mb-stack-sm">
+<span class="font-label-caps text-label-caps text-gray-400">Terminal Log</span>
+<span class="material-symbols-outlined text-gray-400" data-icon="terminal">terminal</span>
+</div>
+<div class="font-mono-data text-mono-data text-gray-300 overflow-y-auto text-xs leading-relaxed flex-1">
+<div><span class="text-gray-500">[2026-06-22 15:00:01]</span> Initializing training...</div>
+<div><span class="text-gray-500">[2026-06-22 15:00:05]</span> Loaded dataset: 安全帽检测 / v003 (train: 8402 images, val: 940 images)</div>
+<div><span class="text-gray-500">[2026-06-22 15:00:12]</span> Model: yolo11n.pt loaded successfully. Parameters: 3.2M</div>
+<div><span class="text-gray-500">[2026-06-22 15:01:00]</span> Epoch 1/100... loss: 4.521, mAP50: 0.124</div>
+<div><span class="text-gray-500">...</span></div>
+<div><span class="text-gray-500">[2026-06-22 15:42:15]</span> Epoch 100/100... loss: 1.245, mAP50: 0.924</div>
+<div class="text-green-400"><span class="text-gray-500">[2026-06-22 15:42:18]</span> Training completed successfully. Model saved to runs/detect/train_20260622_150000/weights/best.pt</div>
+</div>
+</div>
+</div>
+<!-- Task List (Bottom) -->
+<div class="col-span-12 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_12px_rgba(28,25,23,0.05)] overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container font-label-caps text-label-caps text-on-surface-variant uppercase border-b border-outline-variant">
+<tr>
+<th class="p-4 font-medium">Run ID</th>
+<th class="p-4 font-medium">数据集</th>
+<th class="p-4 font-medium">基础模型</th>
+<th class="p-4 font-medium">Epochs</th>
+<th class="p-4 font-medium">状态</th>
+<th class="p-4 font-medium">mAP50</th>
+<th class="p-4 font-medium">Recall</th>
+<th class="p-4 font-medium">开始时间</th>
+<th class="p-4 font-medium text-center">操作</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer bg-surface-container-low">
+<td class="p-4 font-mono-data text-mono-data font-medium text-primary">train_20260622_150000</td>
+<td class="p-4">v003</td>
+<td class="p-4">yolo11n.pt</td>
+<td class="p-4 font-mono-data text-mono-data">100/100</td>
+<td class="p-4"><span class="bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider">已完成</span></td>
+<td class="p-4 font-mono-data text-mono-data">0.924</td>
+<td class="p-4 font-mono-data text-mono-data">0.891</td>
+<td class="p-4 font-mono-data text-mono-data text-on-surface-variant">2026-06-22 15:00</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer">
+<td class="p-4 font-mono-data text-mono-data font-medium">train_20260621_093000</td>
+<td class="p-4">v002</td>
+<td class="p-4">yolo11s.pt</td>
+<td class="p-4 font-mono-data text-mono-data">150/150</td>
+<td class="p-4"><span class="bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider">已完成</span></td>
+<td class="p-4 font-mono-data text-mono-data">0.941</td>
+<td class="p-4 font-mono-data text-mono-data">0.902</td>
+<td class="p-4 font-mono-data text-mono-data text-on-surface-variant">2026-06-21 09:30</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer">
+<td class="p-4 font-mono-data text-mono-data font-medium">test_run_alpha</td>
+<td class="p-4">v001</td>
+<td class="p-4">yolo11n.pt</td>
+<td class="p-4 font-mono-data text-mono-data">50/50</td>
+<td class="p-4"><span class="bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider">已完成</span></td>
+<td class="p-4 font-mono-data text-mono-data">0.885</td>
+<td class="p-4 font-mono-data text-mono-data">0.850</td>
+<td class="p-4 font-mono-data text-mono-data text-on-surface-variant">2026-06-20 14:00</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</body></html>
