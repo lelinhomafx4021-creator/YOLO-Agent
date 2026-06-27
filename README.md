@@ -79,6 +79,8 @@ YOLOps-Agent/
 └─ ui-design/             # Stitch 导出稿与参考图
 ```
 
+> 🧪 feat/agent-explore 分支新增：Agent 自动探索数据集功能，自动扫描数据集质量并生成优化建议。
+
 ## 核心卖点
 
 - SQLite 元数据管理：数据集、图片索引、标注历史、训练任务、Agent 会话都结构化入库；图片、txt、pt 和训练图表仍保存在项目本地文件系统。
