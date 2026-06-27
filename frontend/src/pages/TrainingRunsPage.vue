@@ -46,7 +46,7 @@
               </option>
             </select>
           </label>
-          <span class="muted-text" style="font-size:11px">{{ filteredRuns.length }} 条记录</span>
+          <span class="muted-text">{{ filteredRuns.length }} 条记录</span>
         </div>
 
         <div class="table-card section-pad">

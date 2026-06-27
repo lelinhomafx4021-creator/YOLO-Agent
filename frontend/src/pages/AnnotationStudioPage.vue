@@ -266,7 +266,7 @@ import { getAnnotationProgress, getClassConfig, listImages, listVersions, update
 import { getAnnotation, prelabel, updateAnnotation } from '../api/annotations.js'
 import { setActiveDatasetContext } from '../state/workspaceContext.js'
 
-const COLORS = ['#D4783C', '#3e7b59', '#667ea2', '#b65246', '#7c5ce0', '#0f8b8d', '#5b8def', '#9b6b3f']
+const COLORS = ['#E47630', '#3e7b59', '#667ea2', '#b65246', '#7c5ce0', '#0f8b8d', '#5b8def', '#9b6b3f']
 
 const route = useRoute()
 const router = useRouter()
@@ -619,7 +619,7 @@ function classColor(classId) {
   box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
 }
 .dot-reviewed { background: #3e7b59; }
-.dot-ai_prelabel { background: #D4783C; }
+.dot-ai_prelabel { background: #E47630; }
 .dot-unlabeled { background: #999; }
 
 /* 顶部栏 */

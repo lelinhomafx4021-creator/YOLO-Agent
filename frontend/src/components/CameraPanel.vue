@@ -218,7 +218,7 @@ async function detectFrame() {
 function drawDetections(ctx, w, h, boxes) {
   const video = videoEl.value
   if (video) ctx.drawImage(video, 0, 0)
-  const colors = ['#D4783C', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#F59E0B']
+  const colors = ['#E47630', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#F59E0B']
   for (const box of boxes) {
     const color = colors[box.class_id % colors.length]
     const x = (box.x_center - box.width / 2) * w

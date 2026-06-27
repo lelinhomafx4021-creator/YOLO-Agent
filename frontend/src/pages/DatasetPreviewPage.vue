@@ -75,7 +75,7 @@ import { getAnnotationProgress, listImages, listVersions } from '../api/datasets
 import { getAnnotation } from '../api/annotations.js'
 
 const COLORS = [
-  '#D4783C', '#3E7B59', '#667EA2', '#B65246', '#7C5CE0',
+  '#E47630', '#3E7B59', '#667EA2', '#B65246', '#7C5CE0',
   '#0F8B8D', '#5B8DEF', '#9B6B3F', '#E04E8B', '#4CAF50',
 ]
 
@@ -228,7 +228,7 @@ function basename(path) { return String(path || '').replace(/\\/g, '/').split('/
 .thumb-item img { width:40px; height:30px; object-fit:cover; border-radius:3px; flex-shrink:0; background:#e0d8d0; }
 .thumb-label { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
 .thumb-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-.dot-reviewed { background:#3e7b59; } .dot-ai_prelabel { background:#D4783C; } .dot-unlabeled { background:#bbb; }
+.dot-reviewed { background:#3e7b59; } .dot-ai_prelabel { background:#E47630; } .dot-unlabeled { background:#bbb; }
 .preview-stage {
   display:flex; align-items:center; justify-content:center;
   background:#1a1715; position:relative; min-height:0; cursor:pointer;

@@ -91,8 +91,8 @@
               </select>
             </label>
             <label class="form-field"><span>epochs</span><input v-model.number="trainForm.epochs" type="number" min="1" /></label>
-            <div style="display:flex;gap:6px">
-              <label class="form-field" style="flex:1;min-width:0"><span>优化器</span>
+            <div class="form-row">
+              <label class="form-field form-field-flex"><span>优化器</span>
                 <select v-model="trainForm.optimizer" style="width:100%">
                   <option value="auto">auto</option>
                   <option value="SGD">SGD</option>
@@ -100,11 +100,11 @@
                   <option value="AdamW">AdamW</option>
                 </select>
               </label>
-              <label class="form-field" style="flex:1;min-width:0"><span>lr0</span><input v-model="trainForm.lr0" placeholder="0.01" style="width:100%" /></label>
+              <label class="form-field form-field-flex"><span>lr0</span><input v-model="trainForm.lr0" placeholder="0.01" style="width:100%" /></label>
             </div>
-            <div style="display:flex;gap:6px">
-              <label class="form-field" style="flex:1;min-width:0"><span>尺寸</span><input v-model.number="trainForm.imgsz" type="number" min="64" style="width:100%" /></label>
-              <label class="form-field" style="flex:1;min-width:0"><span>Batch</span><input v-model.number="trainForm.batch" type="number" min="1" style="width:100%" /></label>
+            <div class="form-row">
+              <label class="form-field form-field-flex"><span>尺寸</span><input v-model.number="trainForm.imgsz" type="number" min="64" style="width:100%" /></label>
+              <label class="form-field form-field-flex"><span>Batch</span><input v-model.number="trainForm.batch" type="number" min="1" style="width:100%" /></label>
             </div>
             <label class="form-field"><span>训练设备</span>
               <select v-model="trainForm.device">
@@ -138,7 +138,7 @@
                   <td>
                     <RouterLink class="task-name-link" :to="`/training/${run.id}`">{{ run.run_id }}</RouterLink>
                   </td>
-                  <td class="muted-text" style="max-width:120px">{{ run.dataset_name }}</td>
+                  <td class="muted-text cell-clip">{{ run.dataset_name }}</td>
                   <td><span class="model-arch-tag model-arch-tag--sm">{{ archLabel(run.base_model) }}</span></td>
                   <td>
                     <span :class="['chip', statusChipClass(run.status)]">{{ statusText(run.status) }}</span>

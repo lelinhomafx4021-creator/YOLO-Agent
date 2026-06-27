@@ -25,7 +25,7 @@
               <tbody>
                 <tr v-for="r in recentRuns" :key="r.run_id">
                   <td><RouterLink :to="`/training/${r.id}`"><strong>{{ r.model_name || r.run_id }}</strong></RouterLink></td>
-                  <td class="mono muted-text" style="font-size:10px">{{ r.run_id }}</td>
+                  <td class="mono muted-text">{{ r.run_id }}</td>
                   <td>{{ r.project_name || '-' }}</td>
                   <td>{{ r.dataset_name || '-' }}</td>
                   <td><span :class="['chip', statusChip(r.status)]">{{ statusLabel(r.status) }}</span></td>

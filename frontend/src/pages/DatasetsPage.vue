@@ -39,7 +39,7 @@
             <option value="_none">未分类</option>
           </select>
         </label>
-        <span class="muted-text" style="font-size:11px">{{ filteredVersions.length }} 个版本</span>
+        <span class="muted-text">{{ filteredVersions.length }} 个版本</span>
       </div>
 
       <!-- 卡片网格 -->
