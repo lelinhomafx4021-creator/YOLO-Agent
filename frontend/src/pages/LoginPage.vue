@@ -6,9 +6,7 @@
           <AppIcon name="lock" />
         </div>
         <div class="login-header">
-          <span class="login-badge">共享门禁</span>
           <h1>YOLOps Agent</h1>
-          <p>用一个弱密码挡住误操作和误删，不做复杂权限分级。</p>
         </div>
       </div>
 
@@ -30,7 +28,6 @@
         </button>
 
         <p v-if="error" class="error login-error">{{ error }}</p>
-        <p class="login-note">仅用于拦住随手进入和乱删数据，不替代正式权限系统。</p>
       </div>
     </div>
   </div>

@@ -84,6 +84,8 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8009
 
 - [CLAUDE.md](./CLAUDE.md)：维护和收尾说明
 - [docs/项目实现与架构总览.md](./docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E7%8E%B0%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88.md)：唯一详细总览文档
+- [docs/项目知识讲解与面试对接.md](./docs/%E9%A1%B9%E7%9B%AE%E7%9F%A5%E8%AF%86%E8%AE%B2%E8%A7%A3%E4%B8%8E%E9%9D%A2%E8%AF%95%E5%AF%B9%E6%8E%A5.md)：项目知识和面试答法
+- [docs/简历项目亮点.md](./docs/%E7%AE%80%E5%8E%86%E9%A1%B9%E7%9B%AE%E4%BA%AE%E7%82%B9.md)：简历亮点提炼
 - [docs/实习面试项目讲法.md](./docs/%E5%AE%9E%E4%B9%A0%E9%9D%A2%E8%AF%95%E9%A1%B9%E7%9B%AE%E8%AE%B2%E6%B3%95.md)：面试表达稿
 - [docs/YOLOps-Agent 打包发布实施清单.md](./docs/YOLOps-Agent%20%E6%89%93%E5%8C%85%E5%8F%91%E5%B8%83%E5%AE%9E%E6%96%BD%E6%B8%85%E5%8D%95.md)：打包交付清单
 

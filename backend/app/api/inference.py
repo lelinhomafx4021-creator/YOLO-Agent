@@ -15,9 +15,6 @@ from app.core.path_utils import parse_yolo_boxes
 
 router = APIRouter(prefix="/api", tags=["inference"])
 
-# ONNX 等导出格式的扩展名映射
-_EXPORT_WEIGHTS = ["best.onnx", "best.engine", "best.tflite", "best_saved_model", "best_openvino_model"]
-
 
 def _find_pt_weight(model: dict) -> Path | None:
     """仅查找 .pt 权重文件（作为 ONNX 加载失败时的回退）。"""
@@ -35,28 +32,6 @@ def _find_pt_weight(model: dict) -> Path | None:
             return Path(p)
     return None
 
-
-def _find_weight(model: dict) -> Path | None:
-    """为推理选择最佳权重文件。优先 best.pt（稳定可靠）。"""
-    # 1. 优先 .pt（最大兼容性，不需要额外运行时）
-    pt = _find_pt_weight(model)
-    if pt:
-        return pt
-    # 2. 回退到 ONNX/TensorRT 导出
-    registry = Path(model.get("registry_path", ""))
-    if registry.exists():
-        for search_dir in (registry / "exports", registry):
-            if not search_dir.exists():
-                continue
-            for pattern in ("*.engine", "*.onnx"):
-                for f in search_dir.rglob(pattern):
-                    return f
-        weights_dir = registry / "weights"
-        if weights_dir.is_dir():
-            for f in weights_dir.iterdir():
-                if f.suffix in (".engine", ".onnx"):
-                    return f
-    return None
 
 def _find_weight(model: dict) -> Path | None:
     """Choose the weight file used for inference."""
@@ -194,29 +169,33 @@ async def predict(
     if not weight_path:
         raise HTTPException(status_code=400, detail="模型权重文件不存在或已被删除")
 
-    # Load YOLO model — ONNX 加载失败时自动回退到 .pt
-    class_names = []
-    try:
-        from ultralytics import YOLO as _YOLO
-        yolo = _YOLO(str(weight_path))
-    except Exception as e:
-        # ONNX 加载失败 → 尝试用 best.pt 回退
-        fallback = _find_pt_weight(model)
-        if fallback and fallback != weight_path:
-            append_log(log_path, f"ONNX 加载失败({e})，回退到 {fallback.name}")
-            yolo = _YOLO(str(fallback))
-    try:
-        _names = getattr(yolo, "names", None) or {}
-        if _names:
-            class_names = [_names.get(i, f"class_{i}") for i in range(max(_names.keys()) + 1)]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"模型加载失败: {e}") from e
-
     # Create a single batch session directory
     session_id = f"inf_{uuid.uuid4().hex[:8]}"
     session_dir = INFERENCE_DIR / session_id
     session_dir.mkdir(parents=True)
     log_path = INFERENCE_LOG_DIR / f"{session_id}.log"
+
+    # Load YOLO model — 导出格式加载失败时自动回退到 .pt
+    class_names = []
+    yolo = None
+    try:
+        from ultralytics import YOLO as _YOLO
+
+        try:
+            yolo = _YOLO(str(weight_path))
+        except Exception as e:
+            fallback = _find_pt_weight(model)
+            if fallback and fallback != weight_path:
+                append_log(log_path, f"导出模型加载失败({e})，回退到 {fallback.name}")
+                yolo = _YOLO(str(fallback))
+            else:
+                raise
+
+        _names = getattr(yolo, "names", None) or {}
+        if _names:
+            class_names = [_names.get(i, f"class_{i}") for i in range(max(_names.keys()) + 1)]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"模型加载失败: {e}") from e
 
     append_log(log_path, f"=== 推理开始 批次={batch_name or session_id} ===")
     append_log(log_path, f"模型: {model.get('dataset_name', '')} - {model.get('base_model', '')}")
@@ -299,3 +278,17 @@ def get_inference_log(session_id: str):
     if not log_path.exists():
         return {"log": ""}
     return {"log": log_path.read_text(encoding="utf-8")}
+
+
+@router.delete("/inference/{session_id}")
+def delete_inference_session(session_id: str) -> dict:
+    session_dir = INFERENCE_DIR / session_id
+    log_path = INFERENCE_LOG_DIR / f"{session_id}.log"
+    if not session_dir.exists():
+        raise HTTPException(status_code=404, detail="推理历史不存在")
+    shutil.rmtree(session_dir, ignore_errors=True)
+    try:
+        log_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return {"session_id": session_id, "message": "deleted"}

@@ -1,4 +1,4 @@
-import { authFetch, postForm } from './client.js'
+import { authFetch, del as deleteRequest, postForm } from './client.js'
 
 export async function predict(modelId, files, conf, iou, batchName = '') {
   const form = new FormData()
@@ -20,4 +20,8 @@ export function listHistory(limit = 20) {
 export function getInferenceLog(sessionId) {
   return authFetch(`/inference/${sessionId}/log`)
     .catch(() => ({ log: '' }))
+}
+
+export function deleteInferenceHistory(sessionId) {
+  return deleteRequest(`/inference/${sessionId}`)
 }
