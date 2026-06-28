@@ -71,6 +71,8 @@ def list_plans(status: str = "") -> list[dict]:
     返回:
         计划字典对象的列表
     """
+    status = status.strip()
+
     if status:
         # 按指定状态筛选，并按 ID 降序排列（最新的在前）
         return fetch_all("SELECT * FROM iteration_plans WHERE status = %s ORDER BY id DESC", (status,))
