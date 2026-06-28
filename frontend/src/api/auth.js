@@ -26,6 +26,41 @@ export async function login(password) {
   return res.json()
 }
 
+export async function logout() {
+  const token = localStorage.getItem('yolops_token') || ''
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: token ? { 'X-Auth-Token': token } : {},
+    })
+  } catch {
+    // ignore lock/logout network failures on the client
+  }
+}
+
+export async function changePassword(oldPassword, newPassword) {
+  const token = localStorage.getItem('yolops_token') || ''
+  const res = await fetch('/api/auth/password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'X-Auth-Token': token } : {}),
+    },
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    try {
+      const parsed = JSON.parse(text)
+      throw new Error(parsed.detail || text)
+    } catch (e) {
+      if (e.message) throw e
+      throw new Error(text || `${res.status}`)
+    }
+  }
+  return res.json()
+}
+
 export async function verifyToken() {
   const token = localStorage.getItem('yolops_token') || ''
   if (!token) return false

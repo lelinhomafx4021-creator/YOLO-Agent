@@ -1,4 +1,4 @@
-"""标注管理 API — CRUD、AI 预标注、版本历史。"""
+"""标注管理 API — CRUD、模型预标注、版本历史。"""
 
 from pathlib import Path
 
@@ -8,10 +8,84 @@ from app.annotation.prelabel_service import prelabel_image
 from app.annotation.revision_service import get_revisions, get_revision_snapshot, restore_revision, save_revision
 from app.annotation.yolo_txt_io import read_yolo_txt, write_yolo_txt
 from app.core.config import resolve_path
-from app.core.database import db, fetch_one
+from app.core.database import db, fetch_all, fetch_one
+from app.dataset.version_metadata import read_class_names, refresh_dataset_version_metadata
 from app.schemas.common import AnnotationUpdate, PrelabelRequest
 
 router = APIRouter(prefix="/api/annotations", tags=["annotations"])
+
+
+# COCO 80 类（yolo11n / yolov8n 等预训练模型的标准类别）
+COCO_CLASSES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
+    "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
+    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+    "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
+    "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+    "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+]
+
+
+def _model_class_names(model_path: str) -> list[str]:
+    """获取模型类别名；常见 YOLO 基础模型直接用 COCO，避免隐式下载权重。"""
+    model_lower = Path(model_path).name.lower()
+    official_coco_models = {
+        "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
+        "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
+        "yolov5n.pt", "yolov5s.pt", "yolov5m.pt", "yolov5l.pt", "yolov5x.pt",
+    }
+    if model_lower in official_coco_models:
+        return COCO_CLASSES
+    path = resolve_path(model_path)
+    if not path.exists():
+        return COCO_CLASSES
+    try:
+        from ultralytics import YOLO
+        model = YOLO(str(path))
+        names = model.names
+        if isinstance(names, dict):
+            return [str(names[i]) for i in sorted(names.keys(), key=int)]
+        if isinstance(names, list):
+            return [str(name) for name in names]
+    except Exception:
+        return COCO_CLASSES
+    return COCO_CLASSES
+
+
+def _get_image_version(image: dict) -> dict:
+    version = fetch_one("SELECT * FROM dataset_versions WHERE id = %s", (image["dataset_version_id"],))
+    if not version:
+        raise HTTPException(status_code=404, detail="dataset version not found")
+    return version
+
+
+def _dataset_class_names(version: dict) -> list[str]:
+    return read_class_names(resolve_path(version["data_yaml_path"]))
+
+
+def _validate_class_mapping(class_mapping: dict | None, dataset_classes: list[str]) -> dict[str, int]:
+    mapping = {}
+    for key, value in (class_mapping or {}).items():
+        if value is None or value == "":
+            continue
+        dataset_class_id = int(value)
+        if dataset_class_id < 0 or dataset_class_id >= len(dataset_classes):
+            raise HTTPException(status_code=400, detail=f"mapped class_id out of range: {dataset_class_id}")
+        mapping[str(int(key))] = dataset_class_id
+    if not mapping:
+        raise HTTPException(status_code=400, detail="class_mapping is required for prelabel")
+    return mapping
+
+
+@router.get("/model-classes")
+def get_model_classes(model_path: str = "yolo11n.pt") -> dict:
+    """获取模型类别列表，供预标注映射确认使用。"""
+    classes = _model_class_names(model_path)
+    return {"model": model_path, "class_count": len(classes), "classes": classes}
 
 
 def _get_image_or_404(image_id: int) -> dict:
@@ -119,7 +193,7 @@ def update_annotation(image_id: int, payload: AnnotationUpdate) -> dict:
 @router.post("/{image_id}/prelabel")
 def prelabel_annotation(image_id: int, payload: PrelabelRequest) -> dict:
     """
-    对指定图像执行 AI 预标注。
+    对指定图像执行模型预标注。
 
     POST /api/annotations/{image_id}/prelabel
 
@@ -140,6 +214,11 @@ def prelabel_annotation(image_id: int, payload: PrelabelRequest) -> dict:
     """
     # 验证图像存在并获取记录
     image = _get_image_or_404(image_id)
+    if image.get("annotation_status") == "reviewed":
+        raise HTTPException(status_code=409, detail="reviewed annotation will not be overwritten")
+    version = _get_image_version(image)
+    dataset_classes = _dataset_class_names(version)
+    actual_mapping = _validate_class_mapping(payload.class_mapping, dataset_classes)
     if not get_revisions(image_id):
         original_boxes = read_yolo_txt(resolve_path(image["label_path"]))
         save_revision(
@@ -150,39 +229,49 @@ def prelabel_annotation(image_id: int, payload: PrelabelRequest) -> dict:
             note="original label before first prelabel",
         )
     try:
-        # 调用 AI 预标注服务进行自动标注
+        # 调用模型预标注服务进行自动标注
         # 传入原始图像路径、标注文件路径、模型路径和置信度阈值
         boxes = prelabel_image(
             resolve_path(image["image_path"]),
             resolve_path(image["label_path"]),
             payload.model_path,
             payload.conf,
+            actual_mapping,
+            payload.drop_unmapped,
         )
+        boxes, summary = boxes
     except Exception as exc:  # noqa: BLE001
         # 捕获所有异常（BLE001 规则忽略），将异常信息以 400 状态码返回
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    # 将图像标注状态标记为 AI 预标注
+    # 将图像标注状态标记为模型预标注
     with db() as cur:
         cur.execute(
             "UPDATE image_items SET annotation_status = 'ai_prelabel' WHERE id = %s",
             (image_id,),
         )
-    # 自动保存一条 AI 预标注版本的修订记录
-    # source="ai_prelabel" 表示此次变更是由 AI 预标注服务自动触发的
+    # 自动保存一条模型预标注版本的修订记录
+    # source="ai_prelabel" 表示此次变更是由模型预标注服务自动触发的
     save_revision(
         image_item_id=image_id,
-        source="ai_prelabel",  # 修订来源：AI 预标注
+        source="ai_prelabel",  # 修订来源：模型预标注
         label_path=image["label_path"],
         box_count=len(boxes),
-        note=f"model: {payload.model_path}, conf: {payload.conf}",  # 记录使用的模型和置信度参数
+        note=f"model: {payload.model_path}, conf: {payload.conf}, mapped: {summary['mapped_count']}, dropped: {summary['dropped_count']}",
     )
-    return {"image_id": image_id, "status": "ai_prelabel", "boxes": boxes}
+    refresh_dataset_version_metadata(image["dataset_version_id"])
+    return {
+        "image_id": image_id,
+        "status": "ai_prelabel",
+        "boxes": boxes,
+        "mapping": actual_mapping,
+        **summary,
+    }
 
 
 @router.post("/batch-prelabel")
 def batch_prelabel(payload: dict) -> dict:
     """
-    对数据集版本中所有未标注图片进行批量 AI 预标注。
+    对数据集版本中所有未复核图片进行批量模型预标注。
 
     请求体:
       {
@@ -192,16 +281,12 @@ def batch_prelabel(payload: dict) -> dict:
         "class_mapping": {"15": 0, "16": 1}   // 可选: 模型class → 数据集class
       }
 
-    如果不传 class_mapping，auto_map=true 时自动按名称匹配。
+    默认跳过 reviewed 图片；未映射模型类别会被丢弃。
     """
-    from app.core.database import fetch_all
-    import yaml as _yaml
-
     version_id = payload["version_id"]
     model_path = payload.get("model_path", "yolo11n.pt")
     conf = float(payload.get("conf", 0.25))
-    class_mapping = payload.get("class_mapping", None)  # {"15": 0, "16": 1}
-    auto_map = payload.get("auto_map", False)
+    drop_unmapped = bool(payload.get("drop_unmapped", True))
 
     # 获取数据集类别
     version = fetch_one(
@@ -209,28 +294,10 @@ def batch_prelabel(payload: dict) -> dict:
         (version_id,),
     )
     if not version:
-        return {"error": "Dataset version not found"}
+        raise HTTPException(status_code=404, detail="Dataset version not found")
 
-    # 读取 data.yaml 获取数据集类别名
-    dataset_classes = []
-    data_yaml_path = Path(version.get("data_yaml_path", ""))
-    if data_yaml_path.exists():
-        ds_yaml = _yaml.safe_load(data_yaml_path.read_text(encoding="utf-8")) or {}
-        names = ds_yaml.get("names", [])
-        if isinstance(names, dict):
-            dataset_classes = [names.get(i, f"class_{i}") for i in range(len(names))]
-        elif isinstance(names, list):
-            dataset_classes = names
-
-    # 如果 auto_map，按名称匹配
-    if auto_map and not class_mapping and dataset_classes:
-        class_mapping = _auto_map_classes(model_path, dataset_classes)
-        if class_mapping:
-            from app.core.database import db as _db, utc_now as _now
-            # 更新 data.yaml 中的 names 为模型的类别名（如果数据集还没有）
-            pass  # 只在映射时返回，不修改 data.yaml
-
-    actual_mapping = _normalize_mapping(class_mapping) if class_mapping else {}
+    dataset_classes = _dataset_class_names(version)
+    actual_mapping = _validate_class_mapping(payload.get("class_mapping"), dataset_classes)
 
     # 查所有未标注图片
     images = fetch_all(
@@ -238,16 +305,25 @@ def batch_prelabel(payload: dict) -> dict:
         (version_id,),
     )
     if not images:
-        return {"total": 0, "success": 0, "failed": 0, "mapping": actual_mapping, "message": "没有需要预标注的图片"}
+        return {
+            "total": 0,
+            "success": 0,
+            "failed": 0,
+            "mapping": actual_mapping,
+            "message": "没有需要预标注的图片",
+        }
 
     total = len(images)
     success = 0
     failed = 0
+    mapped_total = 0
+    dropped_total = 0
+    unmapped_classes: set[int] = set()
     errors = []
 
     for img in images:
-        image_path = Path(img["image_path"])
-        label_path = Path(img["label_path"]) if img.get("label_path") else (
+        image_path = resolve_path(img["image_path"])
+        label_path = resolve_path(img["label_path"]) if img.get("label_path") else (
             image_path.parent.parent / "labels" / (image_path.stem + ".txt")
         )
         label_path.parent.mkdir(parents=True, exist_ok=True)
@@ -258,33 +334,34 @@ def batch_prelabel(payload: dict) -> dict:
             continue
 
         try:
-            # 保存原始标注
-            if label_path.exists():
-                from app.annotation.yolo_txt_io import read_yolo_txt
+            if not get_revisions(img["id"]):
                 original_boxes = read_yolo_txt(label_path)
-                if original_boxes:
-                    from app.annotation.revision_service import save_revision
+                save_revision(
+                    image_item_id=img["id"],
+                    source="import",
+                    label_path=label_path,
+                    box_count=len(original_boxes),
+                    note="original label before batch prelabel",
+                )
+            else:
+                current_boxes = read_yolo_txt(label_path)
+                if current_boxes:
                     save_revision(
-                        image_id=img["id"],
-                        boxes=original_boxes,
+                        image_item_id=img["id"],
+                        source="batch_prelabel_before",
+                        label_path=label_path,
+                        box_count=len(current_boxes),
                         note="original label before batch prelabel",
-                        source="batch_prelabel",
                     )
 
-            boxes = prelabel_image(image_path, label_path, model_path, conf)
-
-            # 应用类别映射
-            if actual_mapping:
-                mapped_boxes = []
-                for b in boxes:
-                    mid = str(b["class_id"])
-                    if mid in actual_mapping:
-                        b["class_id"] = actual_mapping[mid]
-                        mapped_boxes.append(b)
-                if mapped_boxes:
-                    from app.annotation.yolo_txt_io import write_yolo_txt
-                    write_yolo_txt(label_path, mapped_boxes)
-                boxes = mapped_boxes
+            boxes, summary = prelabel_image(
+                image_path,
+                label_path,
+                model_path,
+                conf,
+                actual_mapping,
+                drop_unmapped,
+            )
 
             with db() as cur:
                 cur.execute(
@@ -292,15 +369,29 @@ def batch_prelabel(payload: dict) -> dict:
                     (img["id"],),
                 )
 
+            save_revision(
+                image_item_id=img["id"],
+                source="ai_prelabel",
+                label_path=label_path,
+                box_count=len(boxes),
+                note=f"batch model: {model_path}, conf: {conf}, mapped: {summary['mapped_count']}, dropped: {summary['dropped_count']}",
+            )
+            mapped_total += summary["mapped_count"]
+            dropped_total += summary["dropped_count"]
+            unmapped_classes.update(summary["unmapped_classes"])
             success += 1
         except Exception as e:
             failed += 1
             errors.append(f"{image_path.name}: {str(e)[:80]}")
 
+    refresh_dataset_version_metadata(version_id)
     return {
         "total": total,
         "success": success,
         "failed": failed,
+        "mapped_count": mapped_total,
+        "dropped_count": dropped_total,
+        "unmapped_classes": sorted(unmapped_classes),
         "errors": errors[:10],
         "model_used": model_path,
         "mapping": actual_mapping,
@@ -308,64 +399,6 @@ def batch_prelabel(payload: dict) -> dict:
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 类别映射辅助
-# ═══════════════════════════════════════════════════════════════════════════
-
-# COCO 80 类（yolo11n 等预训练模型的标准类别）
-COCO_CLASSES = [
-    "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
-    "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
-    "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
-    "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball",
-    "kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket",
-    "bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple",
-    "sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair",
-    "couch","potted plant","bed","dining table","toilet","tv","laptop","mouse",
-    "remote","keyboard","cell phone","microwave","oven","toaster","sink",
-    "refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush",
-]
-
-
-def _normalize_mapping(mapping: dict) -> dict[str, int]:
-    """将映射的 key 统一为字符串，value 为 int。"""
-    return {str(k): int(v) for k, v in mapping.items()}
-
-
-def _auto_map_classes(model_path: str, dataset_classes: list[str]) -> dict | None:
-    """
-    根据类别名称自动生成映射。
-
-    如果模型是 yolo11n（COCO 预训练），用 COCO_CLASSES 匹配。
-    返回 {model_class_id: dataset_class_id}。
-    """
-    model_classes = COCO_CLASSES  # 默认 COCO
-    # 尝试从 yolo11-world 等模型名推断
-    model_lower = model_path.lower()
-    if "yolo11" in model_lower or "yolov8" in model_lower:
-        model_classes = COCO_CLASSES
-
-    mapping = {}
-    for mi, mc in enumerate(model_classes):
-        mc_lower = mc.lower().replace(" ", "")
-        for di, dc in enumerate(dataset_classes):
-            dc_lower = dc.lower().replace(" ", "").replace("_", "")
-            if mc_lower == dc_lower or mc_lower in dc_lower or dc_lower in mc_lower:
-                mapping[str(mi)] = di
-                break
-
-    return mapping if mapping else None
-
-
-@router.get("/model-classes")
-def get_model_classes(model_path: str = "yolo11n.pt") -> dict:
-    """获取模型的类别列表，以及建议的数据集类别映射。"""
-    model_lower = model_path.lower()
-    if "yolo11" in model_lower or "yolov8" in model_lower or "yolo" in model_lower:
-        classes = COCO_CLASSES
-    else:
-        classes = COCO_CLASSES  # fallback
-    return {"model": model_path, "class_count": len(classes), "classes": classes}
 @router.get("/{image_id}/history")
 def list_revision_history(image_id: int) -> list[dict]:
     """
@@ -374,7 +407,7 @@ def list_revision_history(image_id: int) -> list[dict]:
     GET /api/annotations/{image_id}/history
 
     先验证图像存在，然后查询并返回该图像的所有版本记录摘要。
-    版本记录包含手动编辑和 AI 预标注两种来源。
+    版本记录包含手动编辑和模型预标注两种来源。
 
     Args:
         image_id: 图像记录的主键 ID。

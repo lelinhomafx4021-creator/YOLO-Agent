@@ -21,7 +21,7 @@
         <div class="infobar">
           <select v-model="modelId" class="infobar-select">
             <option :value="0" disabled>选择模型</option>
-            <option v-for="m in models" :key="m.id" :value="m.id">{{ m.model_name || m.run_id }} — {{ m.model_format || 'YOLO' }}</option>
+            <option v-for="m in models" :key="m.id" :value="m.id">{{ displayModelName(m) }} — {{ modelFormatLabel(m) }}</option>
           </select>
           <label class="infobar-label">置信度 <input type="range" min="0.05" max="0.95" step="0.05" v-model.number="confidence" /><em>{{ confidence.toFixed(2) }}</em></label>
           <label class="infobar-label">IOU <input type="range" min="0.05" max="0.95" step="0.05" v-model.number="iou" /><em>{{ iou.toFixed(2) }}</em></label>
@@ -51,12 +51,18 @@
           </div>
           <div class="infer-stage">
             <div v-if="!batchResult && !hasInput" class="stage-empty"><AppIcon name="upload" /><span>上传图片并运行推理</span></div>
-            <div v-if="batchResult" class="infer-grid">
-              <div v-for="(r, i) in batchResult.results" :key="i" class="infer-card" @click="previewSrc = r.prediction_image_url">
-                <div class="infer-card-img"><img v-if="r.prediction_image_url" :src="r.prediction_image_url" /><div v-else class="img-empty">?</div><div class="infer-card-overlay"><span>{{ r.box_count }}目标</span></div></div>
-                <div class="infer-card-name">{{ r.filename }}</div>
+            <template v-if="batchResult">
+              <div class="dataset-result-header" style="padding:10px 10px 0">
+                <strong>{{ batchResult.batch_name || '批量推理' }}</strong>
+                <span class="muted-text">{{ batchResult.results?.length || 0 }} 张 · {{ batchResult.total_boxes || 0 }} 个目标</span>
               </div>
-            </div>
+              <div class="infer-grid">
+                <div v-for="(r, i) in batchResult.results" :key="i" class="infer-card" @click="previewSrc = r.prediction_image_url">
+                  <div class="infer-card-img"><img v-if="r.prediction_image_url" :src="r.prediction_image_url" /><div v-else class="img-empty">?</div><div class="infer-card-overlay"><span>{{ r.box_count }}目标</span></div></div>
+                  <div class="infer-card-name">{{ r.filename }}</div>
+                </div>
+              </div>
+            </template>
             <div v-if="previewSrc" class="lightbox-overlay" @click="previewSrc=''"><button class="lightbox-close" @click="previewSrc=''">✕</button><img :src="previewSrc" class="lightbox-img" @click.stop /></div>
           </div>
         </div>
@@ -67,7 +73,7 @@
         <div class="infobar">
           <select v-model="modelId" class="infobar-select">
             <option :value="0" disabled>选择模型</option>
-            <option v-for="m in models" :key="m.id" :value="m.id">{{ m.model_name || m.run_id }} — {{ m.model_format || 'YOLO' }}</option>
+            <option v-for="m in models" :key="m.id" :value="m.id">{{ displayModelName(m) }} — {{ modelFormatLabel(m) }}</option>
           </select>
           <select v-model="datasetVersionId" class="infobar-select" style="min-width:200px">
             <option :value="0" disabled>选择数据集</option>
@@ -102,7 +108,7 @@
         <div class="infobar">
           <select v-model="modelId" class="infobar-select">
             <option :value="0" disabled>选择模型</option>
-            <option v-for="m in models" :key="m.id" :value="m.id">{{ m.model_name || m.run_id }} — {{ m.model_format || 'YOLO' }}</option>
+            <option v-for="m in models" :key="m.id" :value="m.id">{{ displayModelName(m) }} — {{ modelFormatLabel(m) }}</option>
           </select>
           <label class="infobar-label">置信度 <input type="range" min="0.05" max="0.95" step="0.05" v-model.number="confidence" /><em>{{ confidence.toFixed(2) }}</em></label>
           <label class="infobar-label">IOU <input type="range" min="0.05" max="0.95" step="0.05" v-model.number="iou" /><em>{{ iou.toFixed(2) }}</em></label>
@@ -120,8 +126,9 @@ import { computed, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import CameraPanel from '../components/CameraPanel.vue'
 import { listModels } from '../api/models.js'
-import { listVersions } from '../api/datasets.js'
+import { listImages, listVersions } from '../api/datasets.js'
 import { predict, listHistory } from '../api/inference.js'
+import { displayModelName } from '../utils.js'
 
 const models = ref([])
 const datasetVersions = ref([])
@@ -182,16 +189,21 @@ function clearFiles() { selectedFiles.value = []; thumbUrls.value = []; batchRes
 async function runInference() {
   if (!canRun.value) return
   running.value = true; error.value = ''; batchResult.value = null; processedCount.value = 0
+  activeHistoryId.value = null
   // 分批跑，每批 5 张
   const batchSize = 5
   const allResults = []
+  const batchName = buildBatchName(selectedFiles.value)
   for (let i = 0; i < selectedFiles.value.length; i += batchSize) {
     const batch = selectedFiles.value.slice(i, i + batchSize)
     try {
-      const res = await predict(modelId.value, batch, confidence.value, iou.value)
+      const res = await predict(modelId.value, batch, confidence.value, iou.value, batchName)
       allResults.push(...(res.results || []))
       processedCount.value = Math.min(i + batchSize, selectedFiles.value.length)
-      batchResult.value = { ...res, results: [...allResults] }
+      batchResult.value = { ...res, batch_name: batchName, results: [...allResults] }
+      if (!previewSrc.value && res.results?.[0]?.prediction_image_url) {
+        previewSrc.value = res.results[0].prediction_image_url
+      }
     } catch (e) {
       error.value = e?.message || '推理失败'
       break
@@ -205,19 +217,20 @@ async function loadHistoryResult(h) {
   activeHistoryId.value = h.session_id
   batchResult.value = h
   activeIndex.value = 0
+  previewSrc.value = h?.results?.[0]?.prediction_image_url || ''
 }
 
 async function runDatasetInference() {
   if (!datasetVersionId.value || !modelId.value) return
   running.value = true; error.value = ''; datasetResult.value = null
   try {
-    const resp = await fetch(`/api/dataset-versions/${datasetVersionId.value}/images?page_size=200`)
-    const data = await resp.json()
+    const data = await listImages({ versionId: datasetVersionId.value, pageSize: 200 })
     const imageItems = data.items || []
     if (!imageItems.length) { error.value = '该数据集没有图片'; running.value = false; return }
     const blobs = []
     for (const item of imageItems) {
-      const imgUrl = '/images/' + String(item.image_path).replace(/\\/g, '/').replace(/^.*?datasets\//, '')
+      const imgUrl = datasetImageUrl(item.image_path)
+      if (!imgUrl) continue
       const r = await fetch(imgUrl)
       if (r.ok) {
         const blob = await r.blob()
@@ -235,5 +248,27 @@ async function runDatasetInference() {
 
 async function loadHistory() {
   try { history.value = await listHistory(20) || [] } catch {}
+}
+
+function modelFormatLabel(model) {
+  return model?.model_format ? String(model.model_format).toUpperCase() : 'YOLO'
+}
+
+function buildBatchName(files) {
+  const names = (files || []).map(file => String(file?.name || '').replace(/\.[^.]+$/, '')).filter(Boolean)
+  if (!names.length) return '批量推理'
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} + ${names[1]}`
+  return `${names[0]} 等 ${names.length} 张`
+}
+
+function datasetImageUrl(path) {
+  const normalized = String(path || '').replace(/\\/g, '/')
+  const marker = '/datasets/'
+  const idx = normalized.indexOf(marker)
+  if (idx >= 0) return '/images/' + normalized.slice(idx + marker.length)
+  const simpleIdx = normalized.indexOf('datasets/')
+  if (simpleIdx >= 0) return '/images/' + normalized.slice(simpleIdx + 'datasets/'.length)
+  return ''
 }
 </script>

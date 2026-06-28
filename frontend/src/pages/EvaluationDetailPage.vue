@@ -32,11 +32,12 @@
 
       <section class="card section-pad compact-detail-section">
         <div class="detail-grid">
-          <div class="info-item"><span>验证 Run</span><strong>{{ run.run_id }}</strong></div>
-          <div class="info-item"><span>模型来源</span><strong>{{ run.model_name || run.model_run_id || '-' }}</strong></div>
-          <div class="info-item"><span>验证数据</span><strong>{{ run.dataset_name }} / {{ run.dataset_version_name }}</strong></div>
+          <div class="info-item"><span>验证任务</span><strong>{{ run.run_id }}</strong></div>
+          <div class="info-item"><span>来源训练</span><strong>{{ run.source_training_display_name || '无关联训练' }}</strong></div>
+          <div class="info-item"><span>模型来源</span><strong>{{ displayModelName(run) }}</strong></div>
+          <div class="info-item"><span>验证数据</span><strong>{{ displayDatasetName(run) }}</strong></div>
           <div class="info-item"><span>最佳权重</span><strong>{{ basename(run.best_pt_path) }}</strong></div>
-          <div class="info-item wide"><span>运行目录</span><strong>{{ run.run_path }}</strong></div>
+          <div class="info-item wide"><span>运行目录</span><strong :title="run.run_path || ''">{{ basename(run.run_path) }}</strong></div>
         </div>
       </section>
 
@@ -136,7 +137,7 @@ import AppIcon from '../components/AppIcon.vue'
 import LogTerminal from '../components/LogTerminal.vue'
 import { getEvaluationRun, listEvaluationSamples, getEvaluationLog, getEvaluationProgress } from '../api/projects.js'
 import { getEvaluationReport, regenerateEvaluationReport } from '../api/reports.js'
-import { basename, fmtMetric, statusText } from '../utils.js'
+import { basename, displayDatasetName, displayModelName, fmtMetric, statusText } from '../utils.js'
 
 const route = useRoute()
 const router = useRouter()

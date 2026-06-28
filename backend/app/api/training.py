@@ -9,6 +9,7 @@ from app.agents.training_analyst_agent import generate_training_report
 from app.core.config import RUNS_DIR
 from app.core.database import db, fetch_all, fetch_one
 from app.core.path_utils import file_to_url
+from app.presentation import decorate_model, decorate_training_run
 from app.schemas.common import TrainingCreate
 from app.training.trainer import create_training_run, start_training_background
 
@@ -78,9 +79,20 @@ def list_training_runs(
 ) -> dict:
     total = fetch_one("SELECT COUNT(*) AS c FROM training_runs")
     rows = fetch_all(
-        "SELECT * FROM training_runs ORDER BY id DESC LIMIT %s OFFSET %s",
+        """
+        SELECT tr.*, p.name AS project_name, dv.version AS dataset_version_name,
+               d.name AS dataset_name, mv.id AS model_id, mv.model_name, mv.run_id AS model_run_id,
+               mv.base_model AS model_base_model, mv.model_format, mv.map50, mv.map50_95
+        FROM training_runs tr
+        LEFT JOIN projects p ON p.id = tr.project_id
+        LEFT JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
+        LEFT JOIN datasets d ON d.id = dv.dataset_id
+        LEFT JOIN model_versions mv ON mv.training_run_id = tr.id
+        ORDER BY tr.id DESC LIMIT %s OFFSET %s
+        """,
         (page_size, (page - 1) * page_size),
     )
+    rows = [decorate_training_run(row) for row in rows]
     return {"items": rows, "total": total["c"] if total else 0, "page": page, "page_size": page_size}
 
 
@@ -104,15 +116,33 @@ def create_training_dry_run(payload: TrainingCreate) -> dict:
 
 @router.get("/{training_run_id}")
 def get_training_run(training_run_id: int) -> dict:
-    row = fetch_one("SELECT * FROM training_runs WHERE id = %s", (training_run_id,))
+    row = fetch_one(
+        """
+        SELECT tr.*, p.name AS project_name, dv.version AS dataset_version_name, d.name AS dataset_name
+        FROM training_runs tr
+        LEFT JOIN projects p ON p.id = tr.project_id
+        LEFT JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
+        LEFT JOIN datasets d ON d.id = dv.dataset_id
+        WHERE tr.id = %s
+        """,
+        (training_run_id,),
+    )
     if not row:
         raise HTTPException(status_code=404, detail="training run not found")
-    return row
+    return decorate_training_run(row)
 
 
 @router.get("/{training_run_id}/detail")
 def get_training_run_detail(training_run_id: int) -> dict:
-    run = fetch_one("SELECT * FROM training_runs WHERE id = %s", (training_run_id,))
+    run = fetch_one(
+        """
+        SELECT tr.*, p.name AS project_name
+        FROM training_runs tr
+        LEFT JOIN projects p ON p.id = tr.project_id
+        WHERE tr.id = %s
+        """,
+        (training_run_id,),
+    )
     if not run:
         raise HTTPException(status_code=404, detail="training run not found")
 
@@ -125,7 +155,16 @@ def get_training_run_detail(training_run_id: int) -> dict:
         """,
         (run["dataset_version_id"],),
     )
-    model = fetch_one("SELECT * FROM model_versions WHERE training_run_id = %s", (training_run_id,))
+    model = fetch_one(
+        """
+        SELECT mv.*, p.name AS project_name, tr.display_name AS source_training_display_name
+        FROM model_versions mv
+        LEFT JOIN projects p ON p.id = mv.project_id
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
+        WHERE mv.training_run_id = %s
+        """,
+        (training_run_id,),
+    )
     report = None
     if run.get("report_path"):
         report = {"training_run_id": training_run_id, "report_path": run["report_path"], "summary": run.get("summary", "")}
@@ -156,9 +195,9 @@ def get_training_run_detail(training_run_id: int) -> dict:
             report_content = report_path.read_text(encoding="utf-8")
 
     return {
-        "run": run,
+        "run": decorate_training_run(run),
         "dataset_version": dataset_version,
-        "model": model,
+        "model": decorate_model(model) if model else None,
         "metrics": metrics,
         "artifacts": artifacts,
         "report": report,
@@ -266,10 +305,12 @@ def update_training_run(training_run_id: int, payload: dict) -> dict:
     run = fetch_one("SELECT * FROM training_runs WHERE id = %s", (training_run_id,))
     if not run:
         raise HTTPException(status_code=404, detail="training run not found")
-    allowed = {"epochs", "imgsz", "batch", "device", "base_model", "run_name", "notes", "optimizer", "lr0"}
+    allowed = {"epochs", "imgsz", "batch", "device", "base_model", "run_name", "display_name", "notes", "optimizer", "lr0"}
     updates = {k: v for k, v in payload.items() if k in allowed and v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="no valid fields to update")
+    if "run_name" in updates and "display_name" not in updates:
+        updates["display_name"] = updates.pop("run_name")
     sets = ", ".join(f"{k} = %s" for k in updates)
     vals = list(updates.values()) + [training_run_id]
     with db() as cur:
@@ -280,7 +321,20 @@ def update_training_run(training_run_id: int, payload: dict) -> dict:
                 "UPDATE model_versions SET notes = %s WHERE training_run_id = %s",
                 (updates["notes"], training_run_id),
             )
-        return dict(cur.execute("SELECT * FROM training_runs WHERE id = %s", (training_run_id,)).fetchone())
+        row = dict(
+            cur.execute(
+                """
+                SELECT tr.*, p.name AS project_name, dv.version AS dataset_version_name, d.name AS dataset_name
+                FROM training_runs tr
+                LEFT JOIN projects p ON p.id = tr.project_id
+                LEFT JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
+                LEFT JOIN datasets d ON d.id = dv.dataset_id
+                WHERE tr.id = %s
+                """,
+                (training_run_id,),
+            ).fetchone()
+        )
+        return decorate_training_run(row)
 
 
 def _artifact_url(file_path: Path) -> str:

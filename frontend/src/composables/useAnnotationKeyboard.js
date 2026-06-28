@@ -36,9 +36,9 @@ import { onMounted, onUnmounted } from 'vue'
  * @param {Object}   handlers               - 回调函数集合，每种按键操作对应的处理函数
  * @param {Function} handlers.onPrevImage   - 上一张图片回调（按 A 或左方向键）
  * @param {Function} handlers.onNextImage   - 下一张图片回调（按 D 或右方向键）
- * @param {Function} handlers.onSave        - 保存回调（按 Ctrl+S / Cmd+S）
+ * @param {Function} handlers.onSave        - 保存回调（按 S / Ctrl+S / Cmd+S）
  * @param {Function} handlers.onToggleMode  - 切换标注模式回调，接收模式名称 'draw'|'select'
- * @param {Function} handlers.onSetClass    - 设置类别回调，接收类别 ID (0-9)
+ * @param {Function} handlers.onSetClass    - 设置类别回调，快捷键 1-0 对应类别 ID 0-9
  * @param {Function} handlers.onDeleteBox   - 删除当前选框回调（按 Delete / Backspace）
  * @param {Function} handlers.onDeselect    - 取消选中回调（按 Escape）
  */
@@ -83,8 +83,8 @@ export function useAnnotationKeyboard(handlers) {
    *   V                -> 切换为选择（select）模式
    *   Delete / Backspace -> 删除当前选框
    *   Escape           -> 取消选中
-   *   S（+Ctrl/Meta）   -> 保存
-   *   0-9              -> 设置对应编号的类别
+   *   S / Ctrl+S / Cmd+S -> 保存
+   *   1-0              -> 设置第 1-10 个类别
    */
   function handleKeydown(e) {
     // 表单控件焦点检测：当用户正在输入框中编辑时，不处理任何快捷键
@@ -136,20 +136,17 @@ export function useAnnotationKeyboard(handlers) {
         break
 
       // ---------- 保存操作 ----------
-      // S 键需同时按住 Ctrl（Windows/Linux）或 Command（macOS）才触发保存
+      // S 键保存；同时兼容 Ctrl+S / Command+S，阻止浏览器默认保存网页行为
       case 's':
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault() // 阻止浏览器默认的"另存为"对话框
-          onSave?.()
-        }
+        e.preventDefault()
+        onSave?.()
         break
 
       // ---------- 类别快速选择 ----------
-      // 数字键 0-9：快速为当前标注设置类别，无需鼠标操作下拉框
-      // 例如按 1 选择类别 ID 为 1 的标注类别
+      // 数字键 1-0：快速设置类别；1 对应 class_id 0，0 对应 class_id 9
       case '0': case '1': case '2': case '3': case '4':
       case '5': case '6': case '7': case '8': case '9':
-        onSetClass?.(parseInt(e.key))
+        onSetClass?.(e.key === '0' ? 9 : parseInt(e.key) - 1)
         break
 
       // 未匹配到任何已定义快捷键的按键，不做任何处理

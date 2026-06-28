@@ -88,6 +88,7 @@ class TrainingRun(SQLModel, table=True):
     __tablename__ = "training_runs"
     id: Optional[int] = Field(default=None, primary_key=True)
     run_id: str = Field(unique=True)
+    display_name: str = ""
     project_id: Optional[int] = None
     dataset_version_id: int
     val_dataset_version_id: Optional[int] = None

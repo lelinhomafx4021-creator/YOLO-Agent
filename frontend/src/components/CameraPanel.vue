@@ -7,7 +7,48 @@
         <button :class="{ active: cameraType === 'rtsp' }" @click="cameraType = 'rtsp'">RTSP / IP 摄像头</button>
       </div>
 
-      <!-- RTSP -->
+      <div v-if="cameraType === 'webcam'" class="camera-local-config">
+        <label class="form-field">
+          <span>设备索引</span>
+          <select v-model.number="deviceIndex">
+            <option v-for="idx in deviceOptions" :key="idx" :value="idx">摄像头 {{ idx }}</option>
+          </select>
+        </label>
+        <div class="camera-actions" style="margin-top:8px">
+          <button v-if="!localStreamId" class="primary-action" :disabled="!modelId" @click="startCamera">开启后端直采</button>
+          <button v-else class="secondary-action danger-action" @click="stopCamera">停止</button>
+          <button v-if="localStreamId && localFrameSrc" class="secondary-action" @click="takeSnapshot">截图保存</button>
+        </div>
+        <p class="helper-text" style="margin-top:8px">当前模式由后端直接读取本机设备，不再逐帧走浏览器上传。</p>
+        <p v-if="localError" class="error" style="margin-top:6px">{{ localError }}</p>
+
+        <div class="camera-dual" style="margin-top:12px">
+          <div class="camera-view">
+            <div class="camera-label">摄像头</div>
+            <img v-if="localFrameSrc" :src="localFrameSrc" class="camera-video" style="object-fit:contain" />
+            <div v-else class="camera-placeholder">
+              <strong>{{ localStreamId ? '等待画面...' : '点击“开启后端直采”开始' }}</strong>
+            </div>
+          </div>
+          <div class="camera-view">
+            <div class="camera-label">检测结果</div>
+            <canvas ref="resultCanvas" class="camera-video"></canvas>
+            <div v-if="!localFrameSrc" class="camera-placeholder">
+              <span>{{ localStreamId ? '等待检测结果...' : '后端直采开启后显示检测结果' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="camera-controls">
+          <div class="camera-stats">
+            <span>状态: {{ localConnected ? '已连接' : (localStreamId ? '连接中' : '未开启') }}</span>
+            <span>FPS: {{ fps }}</span>
+            <span>目标: {{ boxCount }}</span>
+            <span>延迟: {{ latency }}ms</span>
+          </div>
+        </div>
+      </div>
+
       <div v-if="cameraType === 'rtsp'" class="camera-rtsp-config">
         <div class="form-field">
           <span>RTSP 地址</span>
@@ -18,67 +59,20 @@
           <button v-else class="secondary-action danger-action" @click="stopRtsp">断开</button>
         </div>
         <p v-if="rtspError" class="error" style="margin-top:6px">{{ rtspError }}</p>
-        <div v-if="rtspStreamId" class="camera-view" style="margin-top:12px">
+        <div v-if="rtspStreamId" class="camera-view camera-view--single" style="margin-top:12px">
           <img v-if="rtspFrameSrc" :src="rtspFrameSrc" class="camera-video" style="object-fit:contain" />
           <div v-else class="camera-placeholder"><strong>{{ rtspConnected ? '等待画面...' : '连接中...' }}</strong></div>
         </div>
         <div v-if="rtspStreamId" class="camera-controls" style="margin-top:8px">
           <div class="camera-stats">
             <span>状态: {{ rtspConnected ? '已连接' : '连接中' }}</span>
-            <span>目标: {{ boxCount }}</span>
-            <span>延迟: {{ latency }}ms</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 画质 -->
-      <div class="camera-perf-settings">
-        <div class="slider-field">
-          <span>上传画质</span>
-          <div class="slider-row">
-            <input type="range" min="0.3" max="1" step="0.1" v-model.number="jpegQuality" />
-            <em>{{ (jpegQuality * 100).toFixed(0) }}%</em>
-          </div>
-        </div>
-      </div>
-
-      <!-- 本机摄像头 -->
-      <div v-if="cameraType === 'webcam'" class="camera-container">
-        <div class="camera-dual">
-          <!-- 左：原始摄像头 -->
-          <div class="camera-view">
-            <div class="camera-label">摄像头</div>
-            <video ref="videoEl" autoplay playsinline muted class="camera-video"></video>
-            <div v-if="!active" class="camera-placeholder">
-              <strong>点击「开启摄像头」开始</strong>
-            </div>
-          </div>
-          <!-- 右：检测结果 -->
-          <div class="camera-view">
-            <div class="camera-label">检测结果</div>
-            <canvas ref="canvasEl" class="camera-video"></canvas>
-            <div v-if="!active" class="camera-placeholder">
-              <span>等待摄像头...</span>
-            </div>
-          </div>
-        </div>
-        <div class="camera-controls">
-          <div class="camera-stats">
             <span>FPS: {{ fps }}</span>
             <span>目标: {{ boxCount }}</span>
             <span>延迟: {{ latency }}ms</span>
           </div>
-          <div class="camera-actions">
-            <button v-if="!active" class="primary-action" @click="startCamera">开启摄像头</button>
-            <button v-else class="secondary-action danger-action" @click="stopCamera">停止</button>
-            <button v-if="active && !detecting" class="primary-action" @click="startDetection">开始检测</button>
-            <button v-if="detecting" class="secondary-action" @click="stopDetection">暂停检测</button>
-            <button v-if="active" class="secondary-action" @click="takeSnapshot">截图保存</button>
-          </div>
         </div>
       </div>
 
-      <!-- 检测结果 -->
       <div v-if="lastBoxes.length > 0" class="camera-detections">
         <div class="card-title"><strong>当前检测</strong><span>{{ lastBoxes.length }} 个目标</span></div>
         <div class="detection-chips">
@@ -87,13 +81,32 @@
           </span>
         </div>
       </div>
+
+      <div v-if="lastSnapshot" class="camera-snapshot-card">
+        <div class="card-title">
+          <strong>截图已保存</strong>
+          <span>{{ snapshotFolderLabel }}</span>
+        </div>
+        <div class="camera-snapshot-actions">
+          <a v-if="lastSnapshot.snapshot_url" class="secondary-action small-action" :href="lastSnapshot.snapshot_url" target="_blank">原图</a>
+          <a v-if="lastSnapshot.prediction_url" class="primary-action small-action" :href="lastSnapshot.prediction_url" target="_blank">检测图</a>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
-import { cameraFrame, cameraSnapshot, startRtspStream, stopRtspStream, getRtspResult } from '../api/camera.js'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import {
+  getLocalResult,
+  getRtspResult,
+  localSnapshot,
+  startLocalStream,
+  startRtspStream,
+  stopLocalStream,
+  stopRtspStream,
+} from '../api/camera.js'
 
 const props = defineProps({
   modelId: { type: [Number, String], default: '' },
@@ -103,26 +116,17 @@ const props = defineProps({
 
 const emit = defineEmits(['snapshot', 'error'])
 
-// ---- State ----
 const cameraType = ref('webcam')
-const active = ref(false)
-const detecting = ref(false)
-const fps = ref(0)
-const boxCount = ref(0)
-const latency = ref(0)
-const lastBoxes = ref([])
-const classNames = ref([])
-const jpegQuality = ref(0.8)
+const deviceIndex = ref(0)
+const deviceOptions = [0, 1, 2, 3]
+const resultCanvas = ref(null)
 
-const videoEl = ref(null)
-const canvasEl = ref(null)
-let stream = null
-let timer = null
-let lastFrameTime = 0
-let busy = false
-let adaptiveInterval = 300
+const localStreamId = ref('')
+const localConnected = ref(false)
+const localError = ref('')
+const localResult = ref(null)
+let localPollTimer = null
 
-// RTSP
 const rtspUrl = ref('')
 const rtspStreamId = ref('')
 const rtspConnected = ref(false)
@@ -130,156 +134,181 @@ const rtspError = ref('')
 const rtspResult = ref(null)
 let rtspPollTimer = null
 
-const rtspFrameSrc = computed(() => {
-  if (!rtspResult.value?.frame_base64) return ''
-  return 'data:image/jpeg;base64,' + rtspResult.value.frame_base64
+const fps = ref(0)
+const boxCount = ref(0)
+const latency = ref(0)
+const lastBoxes = ref([])
+const classNames = ref([])
+const lastSnapshot = ref(null)
+
+const localFrameSrc = computed(() => {
+  const frame = localResult.value?.frame_base64
+  return frame ? `data:image/jpeg;base64,${frame}` : ''
 })
 
-// ---- Webcam ----
-async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
-    if (videoEl.value) videoEl.value.srcObject = stream
-    active.value = true
-  } catch (err) {
-    emit('error', '无法访问摄像头：' + (err.message || '请检查浏览器权限设置'))
-  }
-}
+const rtspFrameSrc = computed(() => {
+  const frame = rtspResult.value?.frame_base64
+  return frame ? `data:image/jpeg;base64,${frame}` : ''
+})
 
-function stopCamera() {
-  stopDetection()
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
-  if (videoEl.value) videoEl.value.srcObject = null
-  active.value = false
+const snapshotFolderLabel = computed(() => {
+  const sessionId = lastSnapshot.value?.session_id
+  return sessionId ? `camera_snapshots/${sessionId}` : ''
+})
+
+watch(localFrameSrc, () => drawDetectionCanvas())
+watch(lastBoxes, () => drawDetectionCanvas(), { deep: true })
+
+function resetMetrics() {
   fps.value = 0
+  boxCount.value = 0
+  latency.value = 0
+  lastBoxes.value = []
 }
 
-function startDetection() {
-  if (!active.value || !props.modelId) return
-  detecting.value = true
-  adaptiveInterval = 300
-  detectLoop()
+function clearCanvas() {
+  if (!resultCanvas.value) return
+  const ctx = resultCanvas.value.getContext('2d')
+  ctx.clearRect(0, 0, resultCanvas.value.width || 0, resultCanvas.value.height || 0)
 }
 
-function stopDetection() {
-  detecting.value = false
-  if (timer) { clearTimeout(timer); timer = null }
-}
-
-async function detectLoop() {
-  if (!detecting.value) return
-  await detectFrame()
-  const delay = Math.max(50, Math.min(2000, adaptiveInterval))
-  timer = setTimeout(detectLoop, delay)
-}
-
-async function detectFrame() {
-  if (busy || !videoEl.value || !canvasEl.value || !props.modelId) return
-  const video = videoEl.value
-  const canvas = canvasEl.value
-  if (video.readyState < 2) return
-
-  busy = true
-  const t0 = Date.now()
-  try {
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, 0, 0)
-
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', jpegQuality.value))
-    if (!blob) return
-
-    const result = await cameraFrame(Number(props.modelId), blob, props.confidence, props.iou)
-    const elapsed = Date.now() - t0
-    latency.value = elapsed
-
-    const now = Date.now()
-    if (lastFrameTime > 0) {
-      const interval = now - lastFrameTime
-      if (interval > 0) fps.value = Math.round(1000 / interval)
-    }
-    lastFrameTime = now
-    adaptiveInterval = Math.max(50, elapsed + 20)
-
-    lastBoxes.value = result.boxes || []
-    boxCount.value = result.box_count || 0
-    if (result.class_names?.length) classNames.value = result.class_names
-
-    drawDetections(ctx, canvas.width, canvas.height, result.boxes || [])
-  } catch (err) {
-    console.warn('Frame error:', err.message)
-    adaptiveInterval = 2000
-  } finally {
-    busy = false
+function drawDetectionCanvas() {
+  const src = localFrameSrc.value
+  const canvas = resultCanvas.value
+  if (!src || !canvas) {
+    clearCanvas()
+    return
   }
+  const img = new Image()
+  img.onload = () => {
+    canvas.width = img.naturalWidth || img.width
+    canvas.height = img.naturalHeight || img.height
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    drawBoxes(ctx, canvas.width, canvas.height, lastBoxes.value)
+  }
+  img.src = src
 }
 
-function drawDetections(ctx, w, h, boxes) {
-  const video = videoEl.value
-  if (video) ctx.drawImage(video, 0, 0)
+function drawBoxes(ctx, width, height, boxes) {
   const colors = ['#E47630', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#F59E0B']
-  for (const box of boxes) {
-    const color = colors[box.class_id % colors.length]
-    const x = (box.x_center - box.width / 2) * w
-    const y = (box.y_center - box.height / 2) * h
-    const bw = box.width * w
-    const bh = box.height * h
+  for (const box of boxes || []) {
+    const classId = Number(box.class_id || 0)
+    const color = colors[classId % colors.length]
+    const x = (box.x_center - box.width / 2) * width
+    const y = (box.y_center - box.height / 2) * height
+    const bw = box.width * width
+    const bh = box.height * height
     ctx.strokeStyle = color
     ctx.lineWidth = 2
     ctx.strokeRect(x, y, bw, bh)
-    const label = `${resolveName(box.class_id)} ${(box.confidence * 100).toFixed(0)}%`
+    const label = `${resolveName(classId)} ${(box.confidence * 100).toFixed(0)}%`
     ctx.font = '12px sans-serif'
     const tw = ctx.measureText(label).width
     ctx.fillStyle = color
-    ctx.fillRect(x, y - 18, tw + 8, 18)
+    ctx.fillRect(x, Math.max(0, y - 18), tw + 8, 18)
     ctx.fillStyle = '#fff'
-    ctx.fillText(label, x + 4, y - 4)
+    ctx.fillText(label, x + 4, Math.max(12, y - 4))
   }
 }
 
 function resolveName(id) {
-  if (classNames.value.length && id >= 0 && id < classNames.value.length) return classNames.value[id]
-  return 'class_' + id
+  return classNames.value[id] || `class_${id}`
 }
 
-async function takeSnapshot() {
-  if (!videoEl.value || !props.modelId) return
-  const video = videoEl.value
-  const c = document.createElement('canvas')
-  c.width = video.videoWidth
-  c.height = video.videoHeight
-  c.getContext('2d').drawImage(video, 0, 0)
-  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9))
-  if (!blob) return
+async function startCamera() {
+  if (!props.modelId) return
+  localError.value = ''
   try {
-    const result = await cameraSnapshot(Number(props.modelId), blob, props.confidence, props.iou, '手动截图')
-    emit('snapshot', result)
+    const res = await startLocalStream(deviceIndex.value, Number(props.modelId), props.confidence, props.iou)
+    localStreamId.value = res.stream_id
+    if (localPollTimer) clearInterval(localPollTimer)
+    localPollTimer = setInterval(pollLocal, 120)
+    await pollLocal()
   } catch (err) {
-    emit('error', '截图保存失败：' + (err.message || ''))
+    localError.value = err?.message || '开启本机摄像头失败'
+    emit('error', localError.value)
   }
 }
 
-// ---- RTSP ----
+async function stopCamera() {
+  if (localStreamId.value) {
+    try { await stopLocalStream(localStreamId.value) } catch {}
+  }
+  if (localPollTimer) {
+    clearInterval(localPollTimer)
+    localPollTimer = null
+  }
+  localStreamId.value = ''
+  localConnected.value = false
+  localResult.value = null
+  resetMetrics()
+  clearCanvas()
+}
+
+async function pollLocal() {
+  if (!localStreamId.value) return
+  try {
+    const res = await getLocalResult(localStreamId.value)
+    localConnected.value = res.connected || false
+    if (res.error) {
+      localError.value = res.error
+      emit('error', localError.value)
+      await stopCamera()
+      return
+    }
+    if (res.result) {
+      localResult.value = res.result
+      lastBoxes.value = res.result.boxes || []
+      boxCount.value = res.result.box_count || 0
+      latency.value = Math.round(res.result.elapsed_ms || 0)
+      fps.value = Number(res.result.fps || 0).toFixed ? Number(res.result.fps || 0) : 0
+      if (res.result.class_names?.length) classNames.value = res.result.class_names
+    }
+    if (!res.running) await stopCamera()
+  } catch {}
+}
+
+async function takeSnapshot() {
+  if (!localStreamId.value) return
+  try {
+    const result = await localSnapshot(localStreamId.value, '手动截图')
+    lastSnapshot.value = result
+    emit('snapshot', result)
+  } catch (err) {
+    const message = err?.message || '截图保存失败'
+    emit('error', message)
+  }
+}
+
 async function startRtsp() {
   if (!rtspUrl.value || !props.modelId) return
   rtspError.value = ''
   try {
     const res = await startRtspStream(rtspUrl.value, Number(props.modelId), props.confidence, props.iou)
     rtspStreamId.value = res.stream_id
-    rtspPollTimer = setInterval(pollRtsp, 1000)
-    pollRtsp()
-  } catch (err) { rtspError.value = err.message || '连接失败' }
+    if (rtspPollTimer) clearInterval(rtspPollTimer)
+    rtspPollTimer = setInterval(pollRtsp, 200)
+    await pollRtsp()
+  } catch (err) {
+    rtspError.value = err?.message || '连接失败'
+    emit('error', rtspError.value)
+  }
 }
 
 async function stopRtsp() {
-  if (rtspStreamId.value) { try { await stopRtspStream(rtspStreamId.value) } catch {} }
-  if (rtspPollTimer) { clearInterval(rtspPollTimer); rtspPollTimer = null }
+  if (rtspStreamId.value) {
+    try { await stopRtspStream(rtspStreamId.value) } catch {}
+  }
+  if (rtspPollTimer) {
+    clearInterval(rtspPollTimer)
+    rtspPollTimer = null
+  }
   rtspStreamId.value = ''
   rtspConnected.value = false
   rtspResult.value = null
-  lastBoxes.value = []
-  boxCount.value = 0
+  resetMetrics()
 }
 
 async function pollRtsp() {
@@ -287,17 +316,36 @@ async function pollRtsp() {
   try {
     const res = await getRtspResult(rtspStreamId.value)
     rtspConnected.value = res.connected || false
-    if (res.error) { rtspError.value = res.error; stopRtsp(); return }
+    if (res.error) {
+      rtspError.value = res.error
+      emit('error', rtspError.value)
+      await stopRtsp()
+      return
+    }
     if (res.result) {
       rtspResult.value = res.result
       lastBoxes.value = res.result.boxes || []
       boxCount.value = res.result.box_count || 0
-      latency.value = res.result.elapsed_ms || 0
+      latency.value = Math.round(res.result.elapsed_ms || 0)
+      fps.value = Number(res.result.fps || 0)
       if (res.result.class_names?.length) classNames.value = res.result.class_names
     }
-    if (!res.running) stopRtsp()
+    if (!res.running) await stopRtsp()
   } catch {}
 }
 
-onUnmounted(() => { stopCamera(); stopRtsp() })
+watch(cameraType, async (type) => {
+  if (type === 'webcam') await stopRtsp()
+  if (type === 'rtsp') await stopCamera()
+})
+
+watch(() => props.modelId, async () => {
+  if (localStreamId.value) await stopCamera()
+  if (rtspStreamId.value) await stopRtsp()
+})
+
+onUnmounted(async () => {
+  await stopCamera()
+  await stopRtsp()
+})
 </script>

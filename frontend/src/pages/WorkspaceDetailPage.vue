@@ -76,7 +76,7 @@
           <div class="wd-card-actions">
             <button class="secondary-action small-action" @click.stop="openPreview(item)">预览</button>
             <RouterLink v-if="isAnnotation(item)" class="secondary-action small-action" :to="{ path: '/annotation', query: { version: item.id } }" @click.stop>标注</RouterLink>
-            <button v-if="isAnnotation(item) && item.pending_count === 0" class="secondary-action small-action" @click.stop="openSplitDialog(item)">拆分</button>
+            <button v-if="isAnnotation(item) && splitEligibleCount(item) > 0" class="secondary-action small-action" @click.stop="openSplitDialog(item)">拆分已标注</button>
             <button class="secondary-action small-action danger-action" @click.stop="confirmDeleteVersion(item)">删除</button>
           </div>
         </div>
@@ -88,7 +88,9 @@
     <div v-if="showSplitDialog" class="dialog-overlay" @click.self="closeSplitDialog">
       <div class="dialog import-dialog">
         <h3>拆分为独立数据集</h3>
-        <p class="helper-text">将「{{ splitTarget?.dataset_name }} / {{ splitTarget?.version }}」（共 {{ splitTarget?.image_count || 0 }} 张）拆成 3 个独立数据集</p>
+        <p class="helper-text">
+          将「{{ splitTarget?.dataset_name }} / {{ splitTarget?.version }}」中可训练的 {{ splitAvailableCount }} 张已复核图片拆成独立 train / val / test 数据集。
+        </p>
         <div class="segmented" style="margin-bottom:10px">
           <button :class="{ active: splitMode === 'count' }" @click="splitMode = 'count'">按数量</button>
           <button :class="{ active: splitMode === 'ratio' }" @click="splitMode = 'ratio'">按比例</button>
@@ -100,7 +102,7 @@
             <label>Test 张数 <input v-model.number="splitCount.test" type="number" min="0" /></label>
           </div>
           <div class="split-summary">
-            <span>共 {{ splitTarget?.image_count || 0 }} 张，使用 <strong>{{ splitCountTotal }}</strong> 张，剩余 {{ Math.max(0, (splitTarget?.image_count || 0) - splitCountTotal) }} 张不使用</span>
+            <span>可用 {{ splitAvailableCount }} 张，使用 <strong>{{ splitCountTotal }}</strong> 张，剩余 {{ Math.max(0, splitAvailableCount - splitCountTotal) }} 张继续留在标注集</span>
           </div>
         </template>
         <template v-else>
@@ -146,6 +148,7 @@ const splitMode = ref('count')
 const splitRatio = reactive({ train: 70, val: 20, test: 10 })
 const splitCount = reactive({ train: 0, val: 0, test: 0 })
 const splitCountTotal = computed(() => (splitCount.train || 0) + (splitCount.val || 0) + (splitCount.test || 0))
+const splitAvailableCount = computed(() => splitTarget.value ? splitEligibleCount(splitTarget.value) : 0)
 const dtypeChanging = ref(null)
 
 async function changeDtype(item, newDtype) {
@@ -237,6 +240,10 @@ function isAnnotation(item) {
   return (item.dtype || item.status) === 'annotation'
 }
 
+function splitEligibleCount(item) {
+  return isAnnotation(item) ? Number(item.reviewed_count || 0) : Number(item.image_count || 0)
+}
+
 onMounted(load)
 
 async function load() {
@@ -310,18 +317,22 @@ function closeSplitDialog() { showSplitDialog.value = false; splitting.value = f
 async function submitSplitInto() {
   splitError.value = ''
   if (!splitTarget.value) return
-  const totalImages = splitTarget.value.image_count || 0
+  const totalImages = splitAvailableCount.value
+  if (totalImages <= 0) {
+    splitError.value = '当前没有已复核图片可拆分，请先在标注工作台保存/复核一部分图片'
+    return
+  }
   try {
     splitting.value = true
     if (splitMode.value === 'count') {
       const total = (splitCount.train || 0) + (splitCount.val || 0) + (splitCount.test || 0)
       if (total <= 0) { splitError.value = '请至少指定一个拆分数量（train、val 或 test）'; return }
       if (total > totalImages) { splitError.value = `拆分张数总和（${total}）超过了数据集总数（${totalImages} 张），请调整数量`; return }
-      await splitIntoIndependent(splitTarget.value.id, { train_count: splitCount.train, val_count: splitCount.val, test_count: splitCount.test })
+      await splitIntoIndependent(splitTarget.value.id, { train_count: splitCount.train, val_count: splitCount.val, test_count: splitCount.test, only_reviewed: isAnnotation(splitTarget.value) })
     } else {
       const sum = splitRatio.train + splitRatio.val + splitRatio.test
       if (Math.abs(sum - 100) > 1) { splitError.value = `比例之和必须为 100%，当前为 ${sum}%`; return }
-      await splitIntoIndependent(splitTarget.value.id, { train_ratio: splitRatio.train / 100, val_ratio: splitRatio.val / 100, test_ratio: splitRatio.test / 100 })
+      await splitIntoIndependent(splitTarget.value.id, { train_ratio: splitRatio.train / 100, val_ratio: splitRatio.val / 100, test_ratio: splitRatio.test / 100, only_reviewed: isAnnotation(splitTarget.value) })
     }
     showSplitDialog.value = false
     await load()

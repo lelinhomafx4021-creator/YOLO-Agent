@@ -13,7 +13,7 @@
       <div v-if="plan" class="bubble-plan">
         <PlanCard :plan="plan" @save="$emit('save-plan', plan)" />
       </div>
-      <div class="bubble-time" v-if="time">{{ formatTime(time) }}</div>
+      <div class="bubble-time" v-if="time">{{ shortTime(time) }}</div>
     </div>
   </div>
 </template>
@@ -21,6 +21,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import PlanCard from './PlanCard.vue'
+import { shortTime } from '../utils.js'
 
 const props = defineProps({
   role: { type: String, required: true },
@@ -100,7 +101,4 @@ async function copyContent() {
   } catch { /* ignore */ }
 }
 
-function formatTime(t) {
-  return t ? String(t).replace('T',' ').replace('Z','').slice(0,16) : ''
-}
 </script>

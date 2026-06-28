@@ -12,9 +12,17 @@ dist/
 
 # 环境变量（含密钥不入库）
 .env
+.env.*
+!.env.example
+!*.env.example
 
 # 数据文件（大文件不入库）
 backend/data/
+backend/datasets/
+backend/*.pt
+backend/*.onnx
+backend/*.engine
+backend/*.torchscript
 
 # OS
 Thumbs.db

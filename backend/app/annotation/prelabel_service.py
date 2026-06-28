@@ -19,7 +19,63 @@ from pathlib import Path  # 用于处理文件系统路径
 from app.annotation.yolo_txt_io import write_yolo_txt  # YOLO 格式标注数据写入工具
 
 
-def prelabel_image(image_path: Path, label_path: Path, model_path: str, conf: float = 0.25) -> list[dict]:
+def normalize_class_mapping(mapping: dict | None) -> dict[int, int]:
+    """将模型类别 -> 数据集类别映射规范化为 int 字典。"""
+    if not mapping:
+        return {}
+    normalized: dict[int, int] = {}
+    for key, value in mapping.items():
+        if value is None or value == "":
+            continue
+        normalized[int(key)] = int(value)
+    return normalized
+
+
+def apply_class_mapping(
+    boxes: list[dict],
+    class_mapping: dict | None,
+    drop_unmapped: bool = True,
+) -> tuple[list[dict], dict]:
+    """把模型输出类别 ID 转换为数据集类别 ID。"""
+    mapping = normalize_class_mapping(class_mapping)
+    if not mapping:
+        return boxes, {
+            "mapped_count": len(boxes),
+            "dropped_count": 0,
+            "unmapped_classes": [],
+        }
+
+    mapped_boxes: list[dict] = []
+    unmapped_classes: set[int] = set()
+    dropped_count = 0
+    for box in boxes:
+        model_class_id = int(box.get("class_id", -1))
+        if model_class_id in mapping:
+            mapped = dict(box)
+            mapped["model_class_id"] = model_class_id
+            mapped["class_id"] = mapping[model_class_id]
+            mapped_boxes.append(mapped)
+        elif drop_unmapped:
+            dropped_count += 1
+            unmapped_classes.add(model_class_id)
+        else:
+            mapped_boxes.append(dict(box))
+
+    return mapped_boxes, {
+        "mapped_count": len(mapped_boxes),
+        "dropped_count": dropped_count,
+        "unmapped_classes": sorted(unmapped_classes),
+    }
+
+
+def prelabel_image(
+    image_path: Path,
+    label_path: Path,
+    model_path: str,
+    conf: float = 0.25,
+    class_mapping: dict | None = None,
+    drop_unmapped: bool = True,
+) -> tuple[list[dict], dict]:
     """
     对指定图像进行 YOLO 模型预标注，并将结果写入标签文件。
 
@@ -123,11 +179,13 @@ def prelabel_image(image_path: Path, label_path: Path, model_path: str, conf: fl
                 "confidence": float(item.conf[0].item()),
             })
 
+    boxes, summary = apply_class_mapping(boxes, class_mapping, drop_unmapped)
+
     # ----------------------------------------------------------------
-    # 第五步：将检测结果写入 YOLO 格式的标签文件
+    # 第五步：将映射后的检测结果写入 YOLO 格式的标签文件
     # 每行格式为：class_id x_center y_center width height
     # ----------------------------------------------------------------
     write_yolo_txt(label_path, boxes)
 
     # 返回检测结果列表，供调用方进一步使用
-    return boxes
+    return boxes, summary

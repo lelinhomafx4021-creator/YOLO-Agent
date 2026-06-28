@@ -3,9 +3,12 @@
     <div class="page-header">
       <div>
         <h1>系统设置</h1>
-        <p>修改 Agent、LLM、训练设备等运行配置；保存后写入后端 settings.json。</p>
+        <p>修改 Agent、LLM、训练设备和共享门禁密码。普通运行参数会写入后端 `settings.json`。</p>
       </div>
-      <button class="primary-action" @click="save" :disabled="saving"><AppIcon name="check" /> {{ saving ? '保存中...' : '保存设置' }}</button>
+      <button class="primary-action" @click="save" :disabled="saving">
+        <AppIcon name="check" />
+        {{ saving ? '保存中...' : '保存设置' }}
+      </button>
     </div>
 
     <div v-if="loading" class="loading">正在加载设置...</div>
@@ -13,7 +16,10 @@
 
     <div v-else class="settings-grid">
       <section class="card" style="padding:10px 14px">
-        <div class="card-title" style="padding:0 0 6px"><strong>运行环境</strong><span>只读</span></div>
+        <div class="card-title" style="padding:0 0 6px">
+          <strong>运行环境</strong>
+          <span>只读</span>
+        </div>
         <div class="table-card compact-table">
           <table>
             <tbody>
@@ -35,7 +41,7 @@
               <option value="rule">规则分析（本地计算，零成本）</option>
               <option value="llm">LLM 辅助（AI 主动查询数据）</option>
             </select>
-            <span class="hint" v-if="settings.agent_mode === 'llm'">⚠️ 需填写下方 LLM 接口信息并测试通过</span>
+            <span class="hint" v-if="settings.agent_mode === 'llm'">启用前先把下面的 LLM 接口测通。</span>
           </label>
           <label class="form-field">
             <span>默认训练设备</span>
@@ -67,6 +73,29 @@
       </section>
 
       <section class="card settings-panel">
+        <div class="card-title"><strong>访问密码</strong><span>共享弱密码门禁</span></div>
+        <div class="settings-list form-stack">
+          <label class="form-field">
+            <span>原密码</span>
+            <input v-model="passwordForm.oldPassword" type="password" placeholder="先输入当前密码" />
+          </label>
+          <label class="form-field">
+            <span>新密码</span>
+            <input v-model="passwordForm.newPassword" type="password" placeholder="设置新的共享密码" />
+          </label>
+          <label class="form-field">
+            <span>确认新密码</span>
+            <input v-model="passwordForm.confirmPassword" type="password" placeholder="再次输入新密码" />
+          </label>
+          <button class="secondary-action" @click="updatePassword" :disabled="changingPassword">
+            {{ changingPassword ? '更新中...' : '更新密码' }}
+          </button>
+          <p v-if="passwordMsg" :class="passwordOk ? 'action-msg' : 'error'">{{ passwordMsg }}</p>
+          <p class="helper-text">修改后旧密码立即失效，当前会话会自动切换到新的登录令牌。</p>
+        </div>
+      </section>
+
+      <section class="card settings-panel">
         <div class="card-title"><strong>工作区路径</strong><span>后端管理</span></div>
         <div class="settings-list">
           <p>数据集：backend/data/datasets</p>
@@ -84,18 +113,28 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
+import { changePassword as changePasswordApi, saveToken } from '../api/auth.js'
 import { getSettings, testConnection as apiTestConnection, updateSettings } from '../api/settings.js'
 import { getRuntime } from '../api/system.js'
 
 const loading = ref(true)
 const saving = ref(false)
 const testingConn = ref(false)
+const changingPassword = ref(false)
 const error = ref('')
 const saveMsg = ref('')
 const connResult = ref('')
 const connOk = ref(false)
+const passwordMsg = ref('')
+const passwordOk = ref(false)
 const settings = ref({})
 const runtime = ref(null)
+const passwordForm = ref({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
 const databaseLabel = computed(() => {
   const db = runtime.value?.database
   if (!db) return 'SQLite'
@@ -148,6 +187,38 @@ async function testConnection() {
     connResult.value = `连接失败：${err.message}`
   } finally {
     testingConn.value = false
+  }
+}
+
+async function updatePassword() {
+  const { oldPassword, newPassword, confirmPassword } = passwordForm.value
+  passwordMsg.value = ''
+  passwordOk.value = false
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    passwordMsg.value = '请先填写完整的密码信息'
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    passwordMsg.value = '两次输入的新密码不一致'
+    return
+  }
+  if (newPassword.trim().length < 3) {
+    passwordMsg.value = '新密码至少 3 位'
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    const result = await changePasswordApi(oldPassword, newPassword)
+    if (result?.token) saveToken(result.token)
+    passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+    passwordOk.value = true
+    passwordMsg.value = '共享密码已更新'
+  } catch (err) {
+    passwordMsg.value = err.message || '更新密码失败'
+  } finally {
+    changingPassword.value = false
   }
 }
 </script>

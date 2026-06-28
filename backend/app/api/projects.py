@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.core.config import DATASETS_DIR, MODEL_REGISTRY_DIR, RUNS_DIR
 from app.core.database import db, fetch_all, fetch_one, utc_now
 from app.core.path_utils import file_to_url
+from app.presentation import decorate_evaluation_run, decorate_model, decorate_training_run
 from app.schemas.common import EvaluationCreate, ProjectCreate, ProjectDatasetBind, TrainingCreate
 from app.training.evaluator import create_evaluation_run, start_evaluation_background
 from app.training.trainer import create_training_run, start_training_background
@@ -14,6 +15,31 @@ from app.training.trainer import create_training_run, start_training_background
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 ALLOWED_ROLES = {"train", "val", "test", "supplement", "unlabeled"}
+
+
+def _safe_model_display_name(row: dict) -> str:
+    raw_name = str(row.get("model_name") or row.get("run_id") or "").replace("\\", "/")
+    if raw_name and "/" not in raw_name:
+        return raw_name
+    dataset = row.get("dataset_name") or "model"
+    raw_tail = Path(raw_name).name if raw_name else ""
+    if raw_tail:
+        tail = raw_tail.replace(".pt", "").replace(".onnx", "").replace(".engine", "").replace(".yaml", "")
+        if tail and tail.lower() not in {"model", "best", "last"}:
+            return f"{dataset}_{tail}"
+    base = Path(str(row.get("base_model") or "model")).name
+    base = base.replace(".pt", "").replace(".yaml", "") or "model"
+    return f"{dataset}_{base}"
+
+
+def _with_display_model_name(row: dict) -> dict:
+    item = dict(row)
+    name = _safe_model_display_name(item)
+    fmt = str(item.get("model_format") or "").upper()
+    if fmt and fmt != "YOLO" and f"[{fmt}]" not in name:
+        name = f"{name} [{fmt}]"
+    item["display_model_name"] = name
+    return item
 
 
 class ProjectUpdate(BaseModel):
@@ -80,11 +106,13 @@ def get_project(project_id: int) -> dict:
     project = _require_project(project_id)
     project["counts"] = _project_counts(project_id)
     project["datasets"] = _project_datasets(project_id)
-    project["training_runs"] = fetch_all(
+    training_runs = fetch_all(
         """
         SELECT tr.*, dv.version AS dataset_version_name, d.name AS dataset_name,
                mv.model_name, mv.id AS model_id, mv.notes AS model_notes,
-               mv.map50, mv.map50_95, mv.is_production
+               mv.map50, mv.map50_95, mv.is_production,
+               mv.run_id AS model_run_id, mv.base_model AS model_base_model,
+               mv.model_format AS model_format
         FROM training_runs tr
         JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
         JOIN datasets d ON d.id = dv.dataset_id
@@ -95,22 +123,30 @@ def get_project(project_id: int) -> dict:
         """,
         (project_id,),
     )
+    project["training_runs"] = [decorate_training_run(row) for row in training_runs]
     project["models"] = fetch_all(
         """
-        SELECT mv.*, tr.status AS training_status
+        SELECT mv.*, tr.status AS training_status, tr.display_name AS source_training_display_name, p.name AS project_name
         FROM model_versions mv
         LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
+        LEFT JOIN projects p ON p.id = mv.project_id
         WHERE mv.project_id = %s
         ORDER BY mv.id DESC
         LIMIT 50
         """,
         (project_id,),
     )
-    project["evaluation_runs"] = fetch_all(
+    project["models"] = [decorate_model(row) for row in project["models"]]
+    evaluation_runs = fetch_all(
         """
-        SELECT er.*, mv.run_id AS model_run_id, mv.model_name AS model_name, d.name AS dataset_name, dv.version AS dataset_version_name
+        SELECT er.*, mv.run_id AS model_run_id, mv.model_name AS model_name,
+               mv.dataset_name AS model_dataset_name, mv.base_model AS model_base_model,
+               mv.model_format AS model_format, tr.display_name AS source_training_display_name,
+               mv.training_run_id,
+               d.name AS dataset_name, dv.version AS dataset_version_name
         FROM evaluation_runs er
         LEFT JOIN model_versions mv ON mv.id = er.model_version_id
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
         LEFT JOIN dataset_versions dv ON dv.id = er.dataset_version_id
         LEFT JOIN datasets d ON d.id = dv.dataset_id
         WHERE er.project_id = %s
@@ -119,6 +155,7 @@ def get_project(project_id: int) -> dict:
         """,
         (project_id,),
     )
+    project["evaluation_runs"] = [decorate_evaluation_run(row) for row in evaluation_runs]
     project["latest_agent_session"] = fetch_one(
         "SELECT * FROM agent_sessions WHERE project_id = %s ORDER BY id DESC LIMIT 1",
         (project_id,),
@@ -337,9 +374,13 @@ def get_evaluation_run(evaluation_id: int) -> dict:
     run = fetch_one(
         """
         SELECT er.*, mv.run_id AS model_run_id, mv.model_name AS model_name, mv.best_pt_path, mv.last_pt_path,
+               mv.training_run_id, tr.display_name AS source_training_display_name,
+               mv.dataset_name AS model_dataset_name, mv.dataset_version AS model_dataset_version,
+               mv.base_model AS model_base_model, mv.model_format AS model_format,
                d.name AS dataset_name, dv.version AS dataset_version_name
         FROM evaluation_runs er
         LEFT JOIN model_versions mv ON mv.id = er.model_version_id
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
         LEFT JOIN dataset_versions dv ON dv.id = er.dataset_version_id
         LEFT JOIN datasets d ON d.id = dv.dataset_id
         WHERE er.id = %s
@@ -348,6 +389,7 @@ def get_evaluation_run(evaluation_id: int) -> dict:
     )
     if not run:
         raise HTTPException(status_code=404, detail="evaluation run not found")
+    run = decorate_evaluation_run(run)
 
     report_artifacts = []
     run_path = Path(run["run_path"])

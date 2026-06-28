@@ -11,6 +11,7 @@ from app.api import (
     datasets,
     inference,
     models,
+    notifications,
     projects,
     settings,
     training,
@@ -78,6 +79,7 @@ app.include_router(projects.router)
 app.include_router(annotations.router)
 app.include_router(training.router)
 app.include_router(models.router)
+app.include_router(notifications.router)
 app.include_router(settings.router)
 app.include_router(agents.router)
 app.include_router(inference.router)

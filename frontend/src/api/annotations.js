@@ -19,25 +19,27 @@ export function updateAnnotation(imageId, boxes, status = 'reviewed') {
 }
 
 /**
- * 对指定图片执行预标注（AI 自动标注）
+ * 对指定图片执行模型预标注
  * @param {string} imageId   - 图片 ID
  * @param {string} modelPath - 模型路径，默认 'yolo11n.pt'
  * @param {number} conf      - 置信度阈值，默认 0.25
  */
-export function prelabel(imageId, modelPath = 'yolo11n.pt', conf = 0.25) {
-  return post(`/annotations/${imageId}/prelabel`, { model_path: modelPath, conf })
+export function prelabel(imageId, modelPath = 'yolo11n.pt', conf = 0.25, classMapping = null, dropUnmapped = true) {
+  const body = { model_path: modelPath, conf, drop_unmapped: dropUnmapped }
+  if (classMapping) body.class_mapping = classMapping
+  return post(`/annotations/${imageId}/prelabel`, body)
 }
 
 /**
- * 批量预标注 — 对数据集版本中所有未标注图片执行 AI 标注
+ * 批量预标注 — 对数据集版本中所有未复核图片执行模型标注
  * @param {number} versionId    - 数据集版本 ID
  * @param {string} modelPath    - 模型路径
  * @param {number} conf         - 置信度阈值
  * @param {object} classMapping - 类别映射 {模型class: 数据集class}
  * @param {boolean} autoMap     - 是否自动按名称匹配
  */
-export function batchPrelabel(versionId, modelPath = 'yolo11n.pt', conf = 0.25, classMapping = null, autoMap = false) {
-  const body = { version_id: versionId, model_path: modelPath, conf }
+export function batchPrelabel(versionId, modelPath = 'yolo11n.pt', conf = 0.25, classMapping = null, autoMap = false, dropUnmapped = true) {
+  const body = { version_id: versionId, model_path: modelPath, conf, drop_unmapped: dropUnmapped }
   if (classMapping) body.class_mapping = classMapping
   if (autoMap) body.auto_map = true
   return post('/annotations/batch-prelabel', body)

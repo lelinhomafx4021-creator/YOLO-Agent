@@ -39,7 +39,7 @@
             <option value="_none">未分类</option>
           </select>
         </label>
-        <span class="muted-text">{{ filteredVersions.length }} 个版本</span>
+        <span class="toolbar-count-pill">当前结果 <strong>{{ filteredVersions.length }}</strong></span>
       </div>
 
       <!-- 卡片网格 -->
@@ -57,6 +57,7 @@
           <div class="dsc-head">
             <div class="dsc-title-row">
               <strong class="dsc-name">{{ item.dataset_name }}</strong>
+              <span class="dsc-subline">{{ datasetSummary(item) }}</span>
               <div class="dsc-meta">
                 <span class="version-chip">{{ item.version }}</span>
                 <select
@@ -89,8 +90,8 @@
               <b class="dsc-stat-value">{{ fmt(item.instance_count || item.label_file_count || 0) }}</b>
             </div>
             <div class="dsc-stat">
-              <span class="dsc-stat-label">含框图像</span>
-              <b class="dsc-stat-value">{{ item.label_file_count || 0 }}</b>
+              <span class="dsc-stat-label">{{ isAnnotation(item) ? '已复核' : '含框图像' }}</span>
+              <b class="dsc-stat-value">{{ isAnnotation(item) ? (item.reviewed_count || 0) : (item.label_file_count || 0) }}</b>
             </div>
           </div>
 
@@ -377,6 +378,25 @@ function progressPct(item) {
   if (!item.image_count) return 0
   return Math.round(((item.reviewed_count || 0) / item.image_count) * 100)
 }
+function dtypeText(item) {
+  const dt = (item.dtype || '').trim()
+  return {
+    train: '训练集',
+    val: '验证集',
+    test: '测试/推理集',
+    annotation: '标注中',
+  }[dt] || '未分类'
+}
+function datasetSummary(item) {
+  if (isAnnotation(item)) {
+    return `标注工作流 · 已复核 ${item.reviewed_count || 0} / ${item.image_count || 0} 张`
+  }
+  if ((item.dtype || '').trim() === 'train') return '训练数据 · 可直接用于训练和验证'
+  if ((item.dtype || '').trim() === 'val') return '验证数据 · 建议用于评估训练收敛'
+  if ((item.dtype || '').trim() === 'test') return '测试数据 · 适合离线评估与推理抽检'
+  if (hasLabels(item)) return '未分类全集 · 已有标注，可拆分或直接绑定'
+  return '未分类数据 · 当前无标注，适合继续上传或补标'
+}
 
 async function setDtype(item, newDtype) {
   try {
@@ -386,17 +406,18 @@ async function setDtype(item, newDtype) {
 }
 
 
-onMounted(load)
-onActivated(load)
-async function load() {
-  loading.value = true
+onMounted(() => load())
+onActivated(() => load({ silent: true }))
+async function load(options = {}) {
+  const { silent = false } = options
+  if (!silent) loading.value = true
   error.value = ''
   try {
     versions.value = (await listVersions()).items
   } catch (err) {
     error.value = err?.message || '加载数据集列表失败，请检查后端服务是否正常运行'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -458,7 +479,7 @@ async function submitImport() {
       }
     }
     showDatasetDialog.value = false
-    await load()
+    await load({ silent: true })
   } catch (err) {
     const msg = err?.message || String(err)
     if (msg.includes('already exists') || msg.includes('已存在') || msg.includes('UNIQUE')) {
@@ -481,7 +502,7 @@ function confirmDeleteVersion(item) {
   confirmDialog.message = `确认删除「${item.dataset_name} / ${item.version}」？`
   confirmDialog.onConfirm = async () => {
     confirmDialog.visible = false
-    try { await deleteDatasetVersion(item.id); await load() } catch (err) { alert(err?.message || '删除失败') }
+    try { await deleteDatasetVersion(item.id); await load({ silent: true }) } catch (err) { alert(err?.message || '删除失败') }
   }
   confirmDialog.visible = true
 }
@@ -491,7 +512,7 @@ async function openRenameDialog(item) {
   if (!newName || newName === item.dataset_name) return
   try {
     await updateDataset(item.dataset_id, { name: newName, description: '' })
-    await load()
+    await load({ silent: true })
   } catch (err) { alert(err?.message || '改名失败') }
 }
 
@@ -512,7 +533,11 @@ function closeSplitDialog() { showSplitDialog.value = false; splitting.value = f
 async function submitSplitInto() {
   splitError.value = ''
   if (!splitTarget.value) return
-  const totalImages = splitTarget.value.image_count || 0
+  const totalImages = splitImageCount.value
+  if (totalImages <= 0) {
+    splitError.value = '当前没有可拆分的已复核图片'
+    return
+  }
   try {
     splitting.value = true
     if (splitMode.value === 'count') {
@@ -523,6 +548,7 @@ async function submitSplitInto() {
         train_count: splitCount.train,
         val_count: splitCount.val,
         test_count: splitCount.test,
+        only_reviewed: isAnnotation(splitTarget.value),
       })
     } else {
       const sum = splitRatio.train + splitRatio.val + splitRatio.test
@@ -531,10 +557,11 @@ async function submitSplitInto() {
         train_ratio: splitRatio.train / 100,
         val_ratio: splitRatio.val / 100,
         test_ratio: splitRatio.test / 100,
+        only_reviewed: isAnnotation(splitTarget.value),
       })
     }
     showSplitDialog.value = false
-    await load()
+    await load({ silent: true })
   } catch (err) {
     splitError.value = err?.message || '拆分失败'
   } finally { splitting.value = false }
@@ -559,7 +586,7 @@ function continueUpload(item) {
         uploadMsg.value = `续传完成：成功 ${result.added} 张`
         setTimeout(() => { uploadMsg.value = '' }, 3000)
       }
-      await load()
+      await load({ silent: true })
     } catch (err) {
       uploadMsg.value = ''
       error.value = '续传失败：' + (err?.message || String(err))

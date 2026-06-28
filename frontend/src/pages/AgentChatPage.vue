@@ -229,7 +229,7 @@
                       :class="['ref-card', { active: composerRef?.id === item.id && composerRef?.type === group.key }]"
                       @click="pickRef(group.key, item)"
                     >
-                      <div class="ref-card-name">{{ item.run_id || item.dataset_name }}</div>
+                      <div class="ref-card-name">{{ refDisplayName(group.key, item) }}</div>
                       <div class="ref-card-meta">
                         <!-- 训练: 参数 + 数据集 + 验证指标 -->
                         <template v-if="group.key === 'training'">
@@ -302,7 +302,7 @@ import {
   clearActiveProjectContext,
   onActiveProjectContextChange,
 } from '../state/projectContext.js'
-import { shortTime } from '../utils.js'
+import { displayDatasetName, displayModelName, displayTrainingName, shortTime } from '../utils.js'
 
 const router = useRouter()
 const sessionsLoading = ref(true)
@@ -353,19 +353,20 @@ const quickPrompts = computed(() => {
   const le = ctx.latest_evaluation
   const lm = ctx.latest_model
   const versions = ctx.versions || []
+  const latestTrainingName = lr ? displayTrainingName(lr) : ''
+  const latestEvaluationName = le ? displayEvaluationName(le) : ''
+  const latestModelName = lm ? displayModelName(lm) : ''
 
-  // 基于实际状态生成精准提问
   if (lr && le) {
-    // 有训练也有评估 → 可以做过拟合判断
     const trainMap = lr.map50_95
     const evalMap = le.map50_95
     if (trainMap != null && evalMap != null && trainMap - evalMap > 0.03) {
-      prompts.push(`训练 mAP ${trainMap?.toFixed(3)} vs 评估 ${evalMap?.toFixed(3)}，是否过拟合？`)
+      prompts.push(`训练 mAP ${trainMap.toFixed(3)} vs 评估 ${evalMap.toFixed(3)}，是否存在过拟合？`)
     }
-    prompts.push(`对比训练 ${lr.run_id} 和评估 ${le.run_id} 的指标差异`)
+    prompts.push(`对比训练 ${latestTrainingName} 和评估 ${latestEvaluationName} 的指标差异`)
   }
   if (lr) {
-    prompts.push(`分析训练 ${lr.run_id} 的结果，给出改进建议`)
+    prompts.push(`分析训练 ${latestTrainingName} 的结果，给出改进建议`)
     if (lr.map50_95 != null && lr.map50_95 < 0.4) {
       prompts.push(`mAP ${lr.map50_95.toFixed(3)} 偏低，如何提升？`)
     }
@@ -379,29 +380,27 @@ const quickPrompts = computed(() => {
     }
   }
   if (lm) {
-    const prodLabel = lm.is_production ? '已标记生产' : '未部署'
-    prompts.push(`best.pt 是否适合导出？(${prodLabel})`)
+    const prodLabel = lm.is_production ? '已标记为生产模型' : '当前未部署'
+    prompts.push(`模型 ${latestModelName} 是否适合导出部署？${prodLabel}`)
   }
   if (ctx.runs?.length >= 2) {
     prompts.push(`对比最近 ${Math.min(ctx.runs.length, 3)} 次训练的指标趋势`)
   }
 
-  // 始终有"生成优化计划"
-  const planPrompt = lr ? `为训练 ${lr.run_id} 生成一份优化计划` : '生成当前项目的优化计划'
-  if (!prompts.some(p => p.includes('优化计划'))) prompts.push(planPrompt)
+  const planPrompt = lr ? `为训练 ${latestTrainingName} 生成一份优化计划` : '生成当前项目的优化计划'
+  if (!prompts.some((p) => p.includes('优化计划'))) prompts.push(planPrompt)
 
-  // 补齐到 4 个
   if (prompts.length < 4) {
-    const fallbacks = ['如何判断模型是否过拟合？', '训练参数怎么调？', '导入数据后该做什么？', '如何改善标注质量？']
-    for (const f of fallbacks) {
-      if (!prompts.includes(f) && prompts.length < 4) prompts.push(f)
+    const fallbacks = ['如何判断模型是否过拟合？', '训练参数怎么调？', '导入数据后该先做什么？', '如何改善标注质量？']
+    for (const fallback of fallbacks) {
+      if (!prompts.includes(fallback) && prompts.length < 4) prompts.push(fallback)
     }
   }
   return prompts.slice(0, 4)
 })
 
 const primaryPrompt = computed(() => {
-  if (context.value.latest_run) return `分析最近一次训练 ${context.value.latest_run.run_id}，给出下一轮建议`
+  if (context.value.latest_run) return `分析最近一次训练 ${displayTrainingName(context.value.latest_run)}，给出下一轮建议`
   if (context.value.versions?.length) return '分析当前数据集，给出训练建议'
   return ''
 })
@@ -426,7 +425,7 @@ const contextSummary = computed(() => {
     trainings: runs.length,
     evaluations: evals.length,
     models: models.length,
-    latestRun: latestRun ? `${latestRun.run_id} (${latestRun.status})` : null,
+    latestRun: latestRun ? `${displayTrainingName(latestRun)} (${latestRun.status})` : null,
     bestMap: bestMap != null ? bestMap.toFixed(3) : null,
   }
 })
@@ -435,27 +434,46 @@ const contextRefs = computed(() => {
   const ctx = context.value
   return {
     trainings: (ctx.runs || []).slice(0, 6).map(r => ({
-      id: r.id, run_id: r.run_id, status: r.status,
-      epochs: r.epochs, imgsz: r.imgsz,
-      train_dataset: r.train_dataset, val_dataset: r.val_dataset,
+      id: r.id,
+      run_id: r.run_id,
+      status: r.status,
+      training_display_name: displayTrainingName(r),
+      epochs: r.epochs,
+      imgsz: r.imgsz,
+      train_dataset: r.train_dataset,
+      val_dataset: r.val_dataset,
       map50_95: r.map50_95 != null ? r.map50_95.toFixed(3) : null,
     })),
     evaluations: (ctx.evaluations || []).slice(0, 6).map(e => ({
-      id: e.id, run_id: e.run_id, status: e.status,
+      id: e.id,
+      run_id: e.run_id,
+      status: e.status,
+      evaluation_display_name: displayEvaluationName(e),
+      model_display_name: displayModelName(e),
       eval_dataset: e.eval_dataset,
       map50_95: e.map50_95 != null ? e.map50_95.toFixed(3) : null,
       precision: e.precision != null ? Number(e.precision).toFixed(3) : null,
       recall: e.recall != null ? Number(e.recall).toFixed(3) : null,
     })),
     datasets: (ctx.versions || []).slice(0, 6).map(v => ({
-      id: v.id, dataset_name: v.dataset_name, version: v.version, dtype: v.dtype, image_count: v.image_count, class_count: v.class_count,
+      id: v.id,
+      dataset_name: v.dataset_name,
+      version: v.version,
+      dataset_display_name: displayDatasetName(v),
+      dtype: v.dtype,
+      image_count: v.image_count,
+      class_count: v.class_count,
     })),
     models: (ctx.models || []).slice(0, 6).map(m => ({
-      id: m.id, run_id: m.run_id, map50_95: m.map50_95 != null ? m.map50_95.toFixed(3) : null,
+      id: m.id,
+      run_id: m.run_id,
+      model_display_name: displayModelName(m),
+      map50_95: m.map50_95 != null ? m.map50_95.toFixed(3) : null,
       precision: m.precision != null ? Number(m.precision).toFixed(3) : null,
       recall: m.recall != null ? Number(m.recall).toFixed(3) : null,
       map50: m.map50 != null ? Number(m.map50).toFixed(3) : null,
-      best_epoch: m.best_epoch, is_production: m.is_production,
+      best_epoch: m.best_epoch,
+      is_production: m.is_production,
     })),
   }
 })
@@ -466,20 +484,29 @@ const hasContextRefs = computed(() => {
 })
 
 const refGroups = computed(() => [
-  { key: 'training', icon: '🏋️', label: '训练', emptyText: '暂无训练记录',
-    items: contextRefs.value.trainings },
-  { key: 'evaluation', icon: '📊', label: '评估', emptyText: '暂无评估记录',
-    items: contextRefs.value.evaluations },
-  { key: 'dataset', icon: '📦', label: '数据集', emptyText: '暂无数据集',
-    items: contextRefs.value.datasets },
-  { key: 'model', icon: '🧠', label: '模型', emptyText: '暂无模型',
-    items: contextRefs.value.models },
+  { key: 'training', icon: '🏋️', label: '训练', emptyText: '暂无训练记录', items: contextRefs.value.trainings },
+  { key: 'evaluation', icon: '📊', label: '评估', emptyText: '暂无评估记录', items: contextRefs.value.evaluations },
+  { key: 'dataset', icon: '📦', label: '数据集', emptyText: '暂无数据集', items: contextRefs.value.datasets },
+  { key: 'model', icon: '🧠', label: '模型', emptyText: '暂无模型', items: contextRefs.value.models },
 ])
+
+function displayEvaluationName(item) {
+  if (!item) return '-'
+  return item.evaluation_display_name || item.run_id || '-'
+}
+
+function refDisplayName(type, item) {
+  if (type === 'training') return item.training_display_name || displayTrainingName(item)
+  if (type === 'evaluation') return displayEvaluationName(item)
+  if (type === 'dataset') return item.dataset_display_name || displayDatasetName(item)
+  if (type === 'model') return item.model_display_name || displayModelName(item)
+  return item.run_id || item.dataset_name || '-'
+}
 
 function pickRef(type, item) {
   const labels = { training: '训练', evaluation: '评估', dataset: '数据集', model: '模型' }
   const icons = { training: '🏋️', evaluation: '📊', dataset: '📦', model: '🧠' }
-  const name = item.run_id || (item.dataset_name + '/' + item.version)
+  const name = refDisplayName(type, item)
   composerRef.value = {
     id: item.id,
     type,
@@ -649,7 +676,7 @@ async function selectSession(session) {
 
 async function createNewSession() {
   try {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+    const now = shortTime(new Date())
     const session = await createSession(`新会话 ${now}`, projectId.value)
     sessions.value.unshift(session)
     currentSessionId.value = session.id
@@ -815,7 +842,8 @@ async function persistPlan(plan, applyAfterSave) {
         // 检查 plan 标题或用户最后发送的消息中是否提到了该训练
         const title = (plan.title || '')
         const lastMsg = lastSentText.value || ''
-        if (title.includes(lr.run_id) || lastMsg.includes(lr.run_id)) {
+                const displayName = displayTrainingName(lr)
+        if (title.includes(lr.run_id) || lastMsg.includes(lr.run_id) || title.includes(displayName) || lastMsg.includes(displayName)) {
           linkedTrainingId = lr.id
         }
       }
@@ -939,10 +967,10 @@ function getPlanItems(plan) {
 function getLinkedTrainingName(trainingRunId) {
   const runs = context.value.runs || []
   const run = runs.find(r => r.id === trainingRunId)
-  if (run) return `训练: ${run.run_id}`
+  if (run) return `训练: ${displayTrainingName(run)}`
   const models = context.value.models || []
   const model = models.find(m => m.id === trainingRunId)
-  if (model) return `模型: ${model.run_id}`
+  if (model) return `模型: ${displayModelName(model)}`
   return `关联 #${trainingRunId}`
 }
 

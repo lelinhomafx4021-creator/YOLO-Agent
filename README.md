@@ -1,12 +1,53 @@
 # YOLOps-Agent
 
-工业目标检测数据集管理、YOLO 标注工作台、训练归档与 Agent 迭代平台。
+面向目标检测流程的轻量级 YOLOps 工作台，覆盖数据集管理、标注浏览、训练任务、模型归档和 Agent 辅助分析。
 
-这个项目不是“上传图片跑一次 YOLO”的演示，而是面向面试和工程实践的轻量级 YOLOps 系统。它关注目标检测项目真正麻烦的部分：数据集版本、逐图查看图片和 YOLO txt 标注、标注修订历史、训练任务、`best.pt` 归档、训练指标分析，以及 Agent 对下一轮数据和参数的迭代建议。
+这个项目的定位是单机工程演示版和实习作品，不是多人生产系统。当前版本重点是跑通一条完整工作流，并把项目、数据集、训练、模型、Agent 之间的关系整理清楚。
 
-## 快速开始
+## 界面预览
 
-### 1. 启动前端
+### 全局概览
+
+![YOLOps-Agent 全局概览](./docs/readme-overview.png)
+
+### Agent 对话
+
+![YOLOps-Agent Agent 对话](./docs/readme-agent-chat.png)
+
+## 项目定位
+
+- 面向目标检测工程流程，而不只是单次推理 demo
+- 适合实习项目展示、课程演示、单机本地使用
+- 强调数据集、训练、模型、分析之间的闭环
+
+## 技术栈
+
+- 前端：Vue 3 + Vite
+- 后端：FastAPI
+- 训练：Ultralytics YOLO
+- 数据库：SQLite 默认，PostgreSQL 可切换
+- 存储：本地磁盘保存图片、标签、模型和训练产物
+
+## 核心功能
+
+- 数据集导入、版本管理和基础质检
+- 数据集预览页逐图查看图片与 YOLO 标注框
+- 标注工作台编辑框、保存标注、执行预标注
+- 全局训练入口和项目内训练任务创建
+- 训练过程查看、指标展示、模型归档
+- Agent 页面基于项目上下文分析训练、模型和数据集
+
+## 推荐演示路径
+
+1. 进入项目页查看整体概览
+2. 打开数据集页或标注页浏览图片和标签
+3. 在训练页通过全局入口发起训练
+4. 在模型页查看训练产出的模型版本
+5. 进入 Agent 页面做结果分析和下一步建议
+
+## 本地启动
+
+### 前端
 
 ```powershell
 cd D:\workspace\YOLOps-Agent\frontend
@@ -14,92 +55,53 @@ npm install
 npm run dev
 ```
 
-访问：
+访问：`http://127.0.0.1:5174`
 
-```text
-http://127.0.0.1:5174
-```
-
-### 2. 启动后端
-
-当前开发演示默认使用 SQLite，避免被 WSL、容器和端口转发卡住。数据库、图片、导出数据集、训练产物和模型仓库都放在项目本地：
-
-```text
-D:\workspace\YOLOps-Agent\backend\data
-```
+### 后端
 
 ```powershell
 cd D:\workspace\YOLOps-Agent\backend
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8009
 ```
 
-后端地址：
+后端：`http://127.0.0.1:8009`  
+文档：`http://127.0.0.1:8009/docs`
 
-```text
-http://127.0.0.1:8009
-```
+## 数据库切换
 
-API 文档：
+项目通过 `backend/.env` 切换数据库：
 
-```text
-http://127.0.0.1:8009/docs
-```
+- 单机演示推荐 `DB_BACKEND=sqlite`
+- 多人部署或长期运行可切到 `DB_BACKEND=postgres`
 
-## 当前进度
+示例配置见 [backend/.env.example](./backend/.env.example)。
 
-### 已完成的基础能力
+## 文档入口
 
-- Vue 3 + Vite 前端骨架，中文 UI
-- Stitch 风格迁移：暖橙主色 `#F97316`、偏白背景 `#FFF8F5`
-- FastAPI 后端 API 骨架
-- 数据集导入 + YOLO txt 质检 + 版本管理 + SHA256 指纹
-- 标注工作台组件：Canvas bbox 渲染、画框、选框、删框、缩放、平移、快捷键
-- 标注修订历史：保存快照到 `.yolops/history/`，支持查看和恢复
-- 训练任务：后台线程启动 YOLO，归档 `best.pt` 和训练指标
-- 模型仓库：候选模型、生产模型标记
-- Agent 后端：会话、消息、上下文构建、迭代计划保存
+- [CLAUDE.md](./CLAUDE.md)：维护和收尾说明
+- [docs/项目实现与架构总览.md](./docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E7%8E%B0%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88.md)：唯一详细总览文档
+- [docs/实习面试项目讲法.md](./docs/%E5%AE%9E%E4%B9%A0%E9%9D%A2%E8%AF%95%E9%A1%B9%E7%9B%AE%E8%AE%B2%E6%B3%95.md)：面试表达稿
+- [docs/YOLOps-Agent 打包发布实施清单.md](./docs/YOLOps-Agent%20%E6%89%93%E5%8C%85%E5%8F%91%E5%B8%83%E5%AE%9E%E6%96%BD%E6%B8%85%E5%8D%95.md)：打包交付清单
 
-### 当前最重要的开发重点
+## 仓库说明
 
-- 把数据集工作区做成真实图片浏览器：打开数据集版本后能一张一张查看图片和 bbox 状态。
-- 把标注工作台接到真实图片和真实 txt：每次保存都留下修订历史。
-- 把 Agent 对话页做完整：围绕训练参数、数据补充、标注复核生成可保存的下一轮计划。
-- 准备一个 50 到 100 张图片的小型 YOLO 数据集，跑通端到端演示。
+仓库只建议提交源码、文档和配置模板，不建议提交以下运行产物：
 
-## 项目结构
+- `backend/data/` 数据库和业务数据
+- `backend/datasets/` 本地图片数据
+- 训练产物和模型权重
+- `.env`、`.venv`、`node_modules/`
 
-```text
-YOLOps-Agent/
-├─ frontend/              # Vue 前端工作台
-├─ backend/               # FastAPI 后端
-├─ docs/                  # 项目文档
-└─ ui-design/             # Stitch 导出稿与参考图
-```
+## 当前已知限制
 
-> 🧪 feat/agent-explore 分支新增：Agent 自动探索数据集功能，自动扫描数据集质量并生成优化建议。
+- 训练和评估仍由后端进程内任务调度，适合单机使用
+- 当前版本更偏演示闭环，不是生产级任务系统
+- 自动化测试、正式 migration、发布前检查流程还不完整
 
-## 核心卖点
+## 一句话总结
 
-- SQLite 元数据管理：数据集、图片索引、标注历史、训练任务、Agent 会话都结构化入库；图片、txt、pt 和训练图表仍保存在项目本地文件系统。
-- 数据集工作区：每个版本都有 manifest、fingerprint 和图片索引。
-- 逐图标注：打开真实图片，读取 YOLO txt，渲染和编辑 bbox。
-- 标注历史：每次保存生成快照，可查看和恢复。
-- 标注质量门禁：训练前检查缺失 txt、孤儿 txt、越界 bbox、类别不均衡。
-- 训练任务管理：训练绑定数据集版本和参数快照。
-- 模型仓库：每次训练自动归档 `best.pt`、`last.pt`、`results.csv` 和指标。
-- Agent 对话：基于数据质量、训练指标和模型状态回答问题，并保存下一轮迭代计划。
-
-## 文档
-
-- [快速开始](./docs/quick-start.md)
-- [项目计划书](./docs/project-plan.md)
-- [系统架构](./docs/architecture.md)
-- [前端开发说明](./docs/frontend-guide.md)
-- [后端开发说明](./docs/backend-guide.md)
-- [开发路线图](./docs/development-roadmap.md)
-- [API 接口规范](./docs/api-spec.md) — 前后端联调 Shape 约定
-- [前端组件规范](./docs/frontend-component-spec.md) — 组件 Props / 新增页面模板 / CSS class 速查
-- [Track B 实现记录](./docs/track-b-implementation.md) — Phase 1 前端接入完成情况
+YOLOps-Agent 现在最有价值的地方，不是功能堆得多，而是它已经形成了一个可以直接演示、可以讲清楚、也方便继续扩展的目标检测工程闭环。

@@ -58,6 +58,40 @@ def _find_weight(model: dict) -> Path | None:
                     return f
     return None
 
+def _find_weight(model: dict) -> Path | None:
+    """Choose the weight file used for inference."""
+    export_suffixes = {".onnx", ".engine", ".torchscript", ".tflite"}
+    model_format = str(model.get("model_format") or "").lower()
+
+    if model_format in {"onnx", "engine", "torchscript", "tflite"}:
+        for key in ("best_pt_path", "last_pt_path"):
+            p = model.get(key, "")
+            if p and Path(p).exists() and Path(p).suffix.lower() in export_suffixes:
+                return Path(p)
+        registry = Path(model.get("registry_path", ""))
+        if registry.exists():
+            for search_dir in (registry / "exports", registry):
+                if not search_dir.exists():
+                    continue
+                for pattern in ("*.engine", "*.onnx", "*.torchscript", "*.tflite"):
+                    for f in search_dir.rglob(pattern):
+                        return f
+
+    pt = _find_pt_weight(model)
+    if pt:
+        return pt
+
+    registry = Path(model.get("registry_path", ""))
+    if registry.exists():
+        for search_dir in (registry / "exports", registry):
+            if not search_dir.exists():
+                continue
+            for pattern in ("*.engine", "*.onnx", "*.torchscript", "*.tflite"):
+                for f in search_dir.rglob(pattern):
+                    return f
+    return None
+
+
 INFERENCE_DIR = DATA_DIR / "inferences"
 INFERENCE_DIR.mkdir(exist_ok=True)
 INFERENCE_LOG_DIR = DATA_DIR / "inference_logs"

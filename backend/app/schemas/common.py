@@ -181,6 +181,14 @@ class PrelabelRequest(BaseModel):
         le=1.0,
         description="检测置信度阈值，仅保留高于该值的预测框"
     )
+    class_mapping: dict[str, int] | None = Field(
+        default=None,
+        description="模型类别 ID 到数据集类别 ID 的映射，例如 {'0': 1}"
+    )
+    drop_unmapped: bool = Field(
+        default=True,
+        description="是否丢弃未配置映射的模型类别"
+    )
 
 
 class TrainingCreate(BaseModel):

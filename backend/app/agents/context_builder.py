@@ -3,6 +3,7 @@ from typing import Any
 
 from app.core.config import DATASETS_DIR, MODEL_REGISTRY_DIR, RUNS_DIR
 from app.core.database import fetch_all, fetch_one
+from app.presentation import decorate_evaluation_run, decorate_model, decorate_training_run
 
 
 def build_context(project_id: int | None = None) -> dict[str, Any]:
@@ -54,8 +55,9 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
 
         runs = fetch_all(
             """
-            SELECT tr.*, dv.version AS dataset_version_name, d.name AS dataset_name
+            SELECT tr.*, p.name AS project_name, dv.version AS dataset_version_name, d.name AS dataset_name
             FROM training_runs tr
+            LEFT JOIN projects p ON p.id = tr.project_id
             LEFT JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
             LEFT JOIN datasets d ON d.id = dv.dataset_id
             WHERE tr.project_id = %s
@@ -64,6 +66,7 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             """,
             (project_id,),
         )
+        runs = [decorate_training_run(run) for run in runs]
         # 补充训练的 val dataset 信息
         for run in runs:
             if run.get("val_dataset_version_id"):
@@ -78,6 +81,7 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             "SELECT * FROM model_versions WHERE project_id = %s AND training_run_id > 0 ORDER BY id DESC LIMIT 12",
             (project_id,),
         )
+        models = [decorate_model(model) for model in models]
         evaluations = fetch_all(
             """
             SELECT er.*, mv.run_id AS model_run_id
@@ -89,6 +93,7 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             """,
             (project_id,),
         )
+        evaluations = [decorate_evaluation_run(evaluation) for evaluation in evaluations]
         sessions = fetch_all(
             "SELECT * FROM agent_sessions WHERE project_id = %s ORDER BY id DESC LIMIT 10",
             (project_id,),
@@ -104,9 +109,20 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             LIMIT 20
             """
         )
-        runs = fetch_all("SELECT * FROM training_runs ORDER BY id DESC LIMIT 12")
-        models = fetch_all("SELECT * FROM model_versions WHERE training_run_id > 0 ORDER BY id DESC LIMIT 12")
-        evaluations = fetch_all("SELECT * FROM evaluation_runs ORDER BY id DESC LIMIT 12")
+        runs = [
+            decorate_training_run(run)
+            for run in fetch_all(
+                """
+                SELECT tr.*, p.name AS project_name
+                FROM training_runs tr
+                LEFT JOIN projects p ON p.id = tr.project_id
+                ORDER BY tr.id DESC
+                LIMIT 12
+                """
+            )
+        ]
+        models = [decorate_model(model) for model in fetch_all("SELECT * FROM model_versions WHERE training_run_id > 0 ORDER BY id DESC LIMIT 12")]
+        evaluations = [decorate_evaluation_run(evaluation) for evaluation in fetch_all("SELECT * FROM evaluation_runs ORDER BY id DESC LIMIT 12")]
         sessions = fetch_all("SELECT * FROM agent_sessions ORDER BY id DESC LIMIT 10")
 
     versions = []
@@ -193,6 +209,7 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             {
                 "id": run["id"],
                 "run_id": run["run_id"],
+                "training_display_name": run.get("training_display_name") or run.get("display_name") or run["run_id"],
                 "train_dataset": train_ds_info,
                 "val_dataset": val_ds_info,
                 "base_model": run.get("base_model", ""),
@@ -217,8 +234,11 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
             {
                 "id": model["id"],
                 "run_id": model.get("run_id", ""),
+                "model_display_name": model.get("model_display_name") or model.get("display_model_name") or model.get("model_name") or model.get("run_id", ""),
                 "dataset_name": model.get("dataset_name", ""),
                 "dataset_version": model.get("dataset_version", ""),
+                "source_training_display_name": model.get("source_training_display_name", ""),
+                "source_type_label": model.get("source_type_label", ""),
                 "precision": model.get("precision"),
                 "recall": model.get("recall"),
                 "map50": model.get("map50"),
@@ -270,6 +290,7 @@ def build_context(project_id: int | None = None) -> dict[str, Any]:
                 "run_id": evaluation.get("run_id", ""),
                 "status": evaluation.get("status", ""),
                 "model_run_id": evaluation.get("model_run_id", ""),
+                "model_display_name": evaluation.get("model_display_name") or evaluation.get("display_model_name") or evaluation.get("model_name") or evaluation.get("model_run_id", ""),
                 "precision": evaluation.get("precision"),
                 "recall": evaluation.get("recall"),
                 "map50": evaluation.get("map50"),

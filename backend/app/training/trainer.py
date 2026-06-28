@@ -17,7 +17,11 @@ from app.agents.training_analyst_agent import generate_training_report
 from app.core.config import RUNS_DIR
 from app.core.database import db, fetch_all, fetch_one, utc_now
 from app.core.log_capture import LogCapture, append_log
+from app.presentation import build_training_display_name, build_training_run_id
 from app.training.artifact_collector import collect_artifacts
+
+LATEST_PROJECT_MODEL_SENTINEL = "__latest_project_model__"
+TRAINING_RUN_MODEL_PREFIX = "__training_run_model__:"
 
 # ── 队列全局状态 ──────────────────────────────────────────────────────────
 _gpu_lock = threading.Lock()       # GPU 互斥锁
@@ -40,17 +44,21 @@ def create_training_run(
     """创建训练运行记录并初始化目录。"""
     # 尝试获取项目和数据集名生成有意义ID
     proj_name = "proj"
+    project_label = ""
     ds_name = ""
     if project_id:
         p = fetch_one("SELECT name FROM projects WHERE id = %s", (project_id,))
-        if p: proj_name = p["name"][:8]
+        if p:
+            proj_name = p["name"][:8]
+            project_label = p["name"]
     v = fetch_one("SELECT d.name FROM dataset_versions dv JOIN datasets d ON d.id=dv.dataset_id WHERE dv.id=%s", (dataset_version_id,))
     if v: ds_name = v["name"]
     # 计数：该项目第几次训练
     cnt = fetch_one("SELECT COUNT(*) AS c FROM training_runs WHERE project_id = %s", (project_id,))
     n = (cnt["c"] if cnt else 0) + 1
-    ts = utc_now().replace('-','').replace(':','').replace('Z','')[:11]  # MMDDHHMM
-    run_id = run_name or f"{proj_name}-T{n}-{ts}"
+    now = utc_now()
+    display_name = build_training_display_name(project_label, n, run_name)
+    run_id = build_training_run_id(proj_name, n, now)
     run_path = RUNS_DIR / run_id
     log_path = run_path / "train.log"
     run_path.mkdir(parents=True, exist_ok=True)
@@ -59,11 +67,11 @@ def create_training_run(
         cur.execute(
             """
             INSERT INTO training_runs(
-                run_id, project_id, dataset_version_id, val_dataset_version_id, dataset_name, base_model, epochs, imgsz, batch,
+                run_id, display_name, project_id, dataset_version_id, val_dataset_version_id, dataset_name, base_model, epochs, imgsz, batch,
                 device, optimizer, lr0, status, run_path, log_path, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'created', %s, %s, %s) RETURNING *
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'created', %s, %s, %s) RETURNING *
             """,
-            (run_id, project_id, dataset_version_id, val_dataset_version_id, ds_name, base_model, epochs, imgsz, batch, device, optimizer, lr0, str(run_path), str(log_path), utc_now()),
+            (run_id, display_name, project_id, dataset_version_id, val_dataset_version_id, ds_name, base_model, epochs, imgsz, batch, device, optimizer, lr0, str(run_path), str(log_path), now),
         )
         return dict(cur.fetchone())
 
@@ -136,6 +144,99 @@ def _append_log(path: Path, line: str) -> None:
     append_log(path, line)
 
 
+def _resolve_base_model_for_run(run: dict, log_path: Path) -> str:
+    """Resolve deferred base-model selections when a queued run starts."""
+    base_model = (run.get("base_model") or "").strip()
+    if base_model.startswith(TRAINING_RUN_MODEL_PREFIX):
+        raw_target_id = base_model[len(TRAINING_RUN_MODEL_PREFIX):].strip()
+        try:
+            target_run_id = int(raw_target_id)
+        except ValueError as exc:
+            raise RuntimeError(f"训练任务产物引用无效: {base_model}") from exc
+        if target_run_id == int(run["id"]):
+            raise RuntimeError("训练任务不能引用自己的产物作为基础模型。")
+
+        target = fetch_one(
+            """
+            SELECT tr.id, tr.run_id, tr.status, tr.project_id,
+                   mv.best_pt_path, mv.last_pt_path, mv.model_name, mv.run_id AS model_run_id
+            FROM training_runs tr
+            LEFT JOIN model_versions mv ON mv.training_run_id = tr.id
+            WHERE tr.id = %s
+            ORDER BY mv.id DESC
+            LIMIT 1
+            """,
+            (target_run_id,),
+        )
+        if not target:
+            raise RuntimeError(f"找不到被引用的训练任务: {target_run_id}")
+        if run.get("project_id") and target.get("project_id") != run.get("project_id"):
+            raise RuntimeError("不能引用其他项目的训练产物。")
+        if target.get("status") != "completed":
+            raise RuntimeError(f"被引用训练任务 {target.get('run_id')} 当前状态为 {target.get('status')}，没有可用产物。")
+
+        resolved = target.get("best_pt_path") or target.get("last_pt_path") or ""
+        if not resolved:
+            raise RuntimeError(f"被引用训练任务 {target.get('run_id')} 没有注册 best.pt/last.pt。")
+        weight_path = Path(resolved)
+        if not weight_path.exists():
+            raise RuntimeError(f"被引用训练任务的权重不存在: {resolved}")
+
+        with db() as cur:
+            cur.execute(
+                "UPDATE training_runs SET base_model = %s WHERE id = %s",
+                (resolved, run["id"]),
+            )
+        run["base_model"] = resolved
+
+        label = target.get("model_name") or target.get("model_run_id") or target.get("run_id") or f"run#{target_run_id}"
+        _append_log(log_path, f"[queue] base_model resolved to training run output: {label} -> {resolved}")
+        return resolved
+
+    if base_model != LATEST_PROJECT_MODEL_SENTINEL:
+        return base_model
+
+    project_id = run.get("project_id")
+    if project_id is None:
+        raise RuntimeError("当前训练任务没有 project_id，无法解析最新项目模型。")
+
+    latest_model = fetch_one(
+        """
+        SELECT mv.best_pt_path, mv.last_pt_path, mv.model_name, mv.run_id, mv.training_run_id
+        FROM model_versions mv
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
+        WHERE mv.project_id = %s
+          AND COALESCE(mv.model_format, '') IN ('', 'YOLO', 'yolo')
+          AND COALESCE(NULLIF(mv.best_pt_path, ''), NULLIF(mv.last_pt_path, ''), '') <> ''
+          AND COALESCE(tr.status, 'completed') = 'completed'
+        ORDER BY mv.id DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    )
+    if not latest_model:
+        raise RuntimeError("没有找到本项目已完成的 YOLO 模型。请让第一个任务使用预训练模型，后续任务再选择最新项目模型。")
+
+    resolved = latest_model.get("best_pt_path") or latest_model.get("last_pt_path") or ""
+    if not resolved:
+        raise RuntimeError("最新项目模型没有可用的 best.pt/last.pt 权重路径。")
+
+    weight_path = Path(resolved)
+    if not weight_path.exists():
+        raise RuntimeError(f"最新项目模型权重不存在: {resolved}")
+
+    with db() as cur:
+        cur.execute(
+            "UPDATE training_runs SET base_model = %s WHERE id = %s",
+            (resolved, run["id"]),
+        )
+    run["base_model"] = resolved
+
+    label = latest_model.get("model_name") or latest_model.get("run_id") or f"model#{latest_model.get('training_run_id')}"
+    _append_log(log_path, f"[queue] base_model resolved to latest project model: {label} -> {resolved}")
+    return resolved
+
+
 def _run_training(training_run_id: int) -> None:
     """后台线程：加载配置 → YOLO 训练 → 收集产物 → 生成报告。"""
     with db() as cur:
@@ -156,7 +257,8 @@ def _run_training(training_run_id: int) -> None:
 
     try:
         _append_log(log_path, f"=== 训练开始 {run['run_id']} ===")
-        _append_log(log_path, f"模型: {run['base_model']}")
+        resolved_base_model = _resolve_base_model_for_run(run, log_path)
+        _append_log(log_path, f"模型: {resolved_base_model}")
         _append_log(log_path, f"数据: {version.get('data_yaml_path', '')}")
         _append_log(log_path, f"参数: epochs={run['epochs']} imgsz={run['imgsz']} batch={run['batch']}")
 
@@ -165,7 +267,7 @@ def _run_training(training_run_id: int) -> None:
         except ImportError as exc:
             raise RuntimeError("ultralytics is not installed.") from exc
 
-        model = YOLO(run["base_model"])
+        model = YOLO(resolved_base_model)
 
         kwargs = {
             "data": version["data_yaml_path"],

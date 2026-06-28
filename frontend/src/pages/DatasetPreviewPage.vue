@@ -12,7 +12,6 @@
     </div>
 
     <div class="preview-body">
-      <!-- 左侧缩略图列表 -->
       <div class="preview-sidebar">
         <div class="preview-filter">
           <button :class="{ active: filter === '' }" @click="setFilter('')">全部</button>
@@ -35,7 +34,6 @@
         </div>
       </div>
 
-      <!-- 右侧大图 + 标注渲染 -->
       <div class="preview-stage" @click="nextImage">
         <div v-if="loading" class="preview-placeholder">加载中...</div>
         <div v-else-if="!currentImage" class="preview-placeholder">← 选择一张图片查看</div>
@@ -96,110 +94,172 @@ const stageError = ref(false)
 const isAnnotationType = computed(() => (version.value?.dtype || '') === 'annotation')
 const filteredImages = computed(() => {
   if (!filter.value) return images.value
-  return images.value.filter(i => i.annotation_status === filter.value)
+  return images.value.filter((item) => item.annotation_status === filter.value)
 })
 
 onMounted(load)
-onMounted(() => { window.addEventListener('keydown', onKey); window.addEventListener('resize', drawBoxes) })
-onUnmounted(() => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', drawBoxes) })
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('resize', drawBoxes)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', drawBoxes)
+})
 
 async function load() {
   loading.value = true
   try {
     const versionId = Number(route.params.id)
-    if (!versionId) { loading.value = false; return }
+    if (!versionId) {
+      loading.value = false
+      return
+    }
 
     const all = (await listVersions()).items
-    version.value = all.find(v => Number(v.id) === versionId)
-    if (!version.value) { loading.value = false; return }
+    version.value = all.find((item) => Number(item.id) === versionId)
+    if (!version.value) {
+      loading.value = false
+      return
+    }
 
     if (isAnnotationType.value) {
-      try { annotationProgress.value = await getAnnotationProgress(versionId) } catch {}
+      try {
+        annotationProgress.value = await getAnnotationProgress(versionId)
+      } catch {}
     }
 
-    // 分页加载：超过 1000 张时分两次
-    let allItems = []
-    const pg1 = await listImages(versionId, { pageSize: 1000 })
-    allItems = pg1.items || []
-    if (pg1.total > 1000) {
-      const pg2 = await listImages(versionId, { page: 2, pageSize: 1000 })
-      allItems = allItems.concat(pg2.items || [])
-    }
-    images.value = allItems
-    if (images.value.length) selectImage(images.value[0], 0)
-  } catch (e) { console.error('预览加载失败:', e) }
-  finally { loading.value = false }
+    images.value = await loadAllImages(versionId)
+    if (images.value.length) await selectImage(images.value[0], 0)
+  } catch (error) {
+    console.error('预览加载失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadAllImages(versionId) {
+  const pageSize = 500
+  let page = 1
+  let total = 0
+  const allItems = []
+
+  do {
+    const result = await listImages(versionId, { page, pageSize })
+    const items = result.items || []
+    allItems.push(...items)
+    total = Number(result.total || allItems.length)
+    page += 1
+    if (!items.length) break
+  } while (allItems.length < total)
+
+  return allItems
 }
 
 async function selectImage(item, idx) {
   currentId.value = item.id
   currentImage.value = item
-  currentIdx.value = idx ?? filteredImages.value.findIndex(i => i.id === item.id)
+  currentIdx.value = idx ?? filteredImages.value.findIndex((image) => image.id === item.id)
   boxes.value = []
   stageError.value = false
   clearCanvas()
-  try { const r = await getAnnotation(item.id); boxes.value = r.boxes || [] } catch {}
+  try {
+    const result = await getAnnotation(item.id)
+    boxes.value = result.boxes || []
+  } catch {}
   await nextTick()
   if (stageImg.value?.complete && !stageError.value) drawBoxes()
 }
 
-function setFilter(val) {
-  filter.value = val
-  if (filteredImages.value.length && !filteredImages.value.find(i => i.id === currentId.value)) {
+function setFilter(value) {
+  filter.value = value
+  if (filteredImages.value.length && !filteredImages.value.find((item) => item.id === currentId.value)) {
     selectImage(filteredImages.value[0], 0)
   }
 }
 
 function clearCanvas() {
-  const c = boxCanvas.value; if (!c) return
-  c.getContext('2d').clearRect(0, 0, c.width, c.height)
+  const canvas = boxCanvas.value
+  if (!canvas) return
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
 }
 
 function drawBoxes() {
-  const img = stageImg.value; const canvas = boxCanvas.value
+  const img = stageImg.value
+  const canvas = boxCanvas.value
   if (!img || !canvas || !img.complete || stageError.value) return
   const rect = img.getBoundingClientRect()
-  const wrap = img.parentElement; if (!wrap) return
-  const wr = wrap.getBoundingClientRect()
-  canvas.width = rect.width; canvas.height = rect.height
-  canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px'
-  canvas.style.left = (rect.left - wr.left) + 'px'; canvas.style.top = (rect.top - wr.top) + 'px'
-  const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const wrap = img.parentElement
+  if (!wrap) return
+  const wrapRect = wrap.getBoundingClientRect()
+  canvas.width = rect.width
+  canvas.height = rect.height
+  canvas.style.width = `${rect.width}px`
+  canvas.style.height = `${rect.height}px`
+  canvas.style.left = `${rect.left - wrapRect.left}px`
+  canvas.style.top = `${rect.top - wrapRect.top}px`
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
   if (!boxes.value.length) return
-  const dw = rect.width; const dh = rect.height
+
+  const drawWidth = rect.width
+  const drawHeight = rect.height
   for (const box of boxes.value) {
-    const x = (box.x_center - box.width / 2) * dw
-    const y = (box.y_center - box.height / 2) * dh
-    const w = box.width * dw; const h = box.height * dh
+    const x = (box.x_center - box.width / 2) * drawWidth
+    const y = (box.y_center - box.height / 2) * drawHeight
+    const width = box.width * drawWidth
+    const height = box.height * drawHeight
     const color = COLORS[box.class_id % COLORS.length]
-    ctx.strokeStyle = color; ctx.fillStyle = color + '20'; ctx.lineWidth = 2
-    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h)
-    const label = `#${box.class_id}`; const fs = Math.max(10, Math.min(14, h * 0.4))
-    ctx.font = `${fs}px system-ui, sans-serif`
-    const tw = ctx.measureText(label).width
-    ctx.fillStyle = color; ctx.fillRect(x, y - fs - 4, tw + 6, fs + 4)
-    ctx.fillStyle = '#fff'; ctx.fillText(label, x + 3, y - 3)
+    ctx.strokeStyle = color
+    ctx.fillStyle = `${color}20`
+    ctx.lineWidth = 2
+    ctx.fillRect(x, y, width, height)
+    ctx.strokeRect(x, y, width, height)
+    const label = `#${box.class_id}`
+    const fontSize = Math.max(10, Math.min(14, height * 0.4))
+    ctx.font = `${fontSize}px system-ui, sans-serif`
+    const textWidth = ctx.measureText(label).width
+    ctx.fillStyle = color
+    ctx.fillRect(x, y - fontSize - 4, textWidth + 6, fontSize + 4)
+    ctx.fillStyle = '#fff'
+    ctx.fillText(label, x + 3, y - 3)
   }
 }
 
 function prevImage() {
-  if (currentIdx.value > 0) selectImage(filteredImages.value[currentIdx.value - 1], currentIdx.value - 1)
+  if (currentIdx.value > 0) {
+    selectImage(filteredImages.value[currentIdx.value - 1], currentIdx.value - 1)
+  }
 }
+
 function nextImage() {
-  if (currentIdx.value < filteredImages.value.length - 1) selectImage(filteredImages.value[currentIdx.value + 1], currentIdx.value + 1)
+  if (currentIdx.value < filteredImages.value.length - 1) {
+    selectImage(filteredImages.value[currentIdx.value + 1], currentIdx.value + 1)
+  }
 }
-function onKey(e) {
-  if (e.key === 'ArrowLeft') prevImage(); if (e.key === 'ArrowRight') nextImage()
+
+function onKey(event) {
+  if (event.key === 'ArrowLeft') prevImage()
+  if (event.key === 'ArrowRight') nextImage()
 }
-function onThumbError(e) { e.target.style.display = 'none' }
-function onStageError() { stageError.value = true }
+
+function onThumbError(event) {
+  event.target.style.display = 'none'
+}
+
+function onStageError() {
+  stageError.value = true
+}
 
 function imageUrl(path) {
-  const n = String(path || '').replace(/\\/g, '/')
-  const idx = n.indexOf('datasets/')
-  return idx >= 0 ? '/images/' + n.slice(idx + 9) : ''
+  const normalized = String(path || '').replace(/\\/g, '/')
+  const idx = normalized.indexOf('datasets/')
+  return idx >= 0 ? `/images/${normalized.slice(idx + 9)}` : ''
 }
-function basename(path) { return String(path || '').replace(/\\/g, '/').split('/').pop() }
+
+function basename(path) {
+  return String(path || '').replace(/\\/g, '/').split('/').pop()
+}
 </script>
 
 <style scoped>

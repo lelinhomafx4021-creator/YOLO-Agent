@@ -192,8 +192,11 @@ def update_dataset_version_classes(version_id: int, raw_class_names: Any) -> dic
         raise ValueError(
             f"existing labels use class_id {current['max_class_id']}, but only {len(class_names)} classes were provided"
         )
+    current_names = current.get("class_names") or []
+    if len(class_names) < len(current_names):
+        raise ValueError("class deletion is disabled; append or rename classes only")
 
-    data_yaml_path = Path(version["data_yaml_path"])
+    data_yaml_path = resolve_path(version["data_yaml_path"])
     yaml_data = {}
     if data_yaml_path.exists():
         try:
@@ -202,7 +205,7 @@ def update_dataset_version_classes(version_id: int, raw_class_names: Any) -> dic
             yaml_data = {}
     write_dataset_yaml(
         data_yaml_path,
-        Path(version["root_path"]),
+        resolve_path(version["root_path"]),
         str(yaml_data.get("train") or "images/train"),
         str(yaml_data.get("val") or "images/val"),
         str(yaml_data.get("test") or "images/test"),
@@ -211,6 +214,8 @@ def update_dataset_version_classes(version_id: int, raw_class_names: Any) -> dic
     refreshed = refresh_dataset_version_metadata(version_id)
     refreshed["dataset_name"] = version.get("dataset_name", "")
     refreshed["status"] = version.get("status", "")
+    refreshed["allow_delete"] = False
+    refreshed["allow_reorder"] = False
     return refreshed
 
 
@@ -235,6 +240,8 @@ def get_dataset_version_class_config(version_id: int) -> dict[str, Any]:
             "version": version.get("version", ""),
             "status": version.get("status", ""),
             "image_count": version.get("image_count", 0),
+            "allow_delete": False,
+            "allow_reorder": False,
         }
     )
     return refreshed

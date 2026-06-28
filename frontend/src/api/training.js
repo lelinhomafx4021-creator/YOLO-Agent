@@ -1,8 +1,12 @@
-import { del, get } from './client.js'
+import { del, get, post, put } from './client.js'
 
 export async function listRuns(page = 1, pageSize = 50) {
   const res = await get(`/training-runs?page=${page}&page_size=${pageSize}`)
   return { items: res.items || [], total: res.total || 0 }
+}
+
+export function createRun(payload) {
+  return post('/training-runs', payload)
 }
 
 export function getRunDetail(id) {

@@ -11,6 +11,7 @@ from app.core.config import MODEL_REGISTRY_DIR, RUNS_DIR
 from app.core.database import db, fetch_all, fetch_one, utc_now
 from app.core.log_capture import append_log
 from app.core.path_utils import delete_model_cascade, file_to_url
+from app.presentation import decorate_model
 from app.registry.model_registry import promote_model
 
 router = APIRouter(prefix="/api/models", tags=["models"])
@@ -19,16 +20,35 @@ router = APIRouter(prefix="/api/models", tags=["models"])
 @router.get("")
 def list_models(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)) -> dict:
     total = fetch_one("SELECT COUNT(*) AS c FROM model_versions")
-    rows = fetch_all("SELECT * FROM model_versions ORDER BY id DESC LIMIT %s OFFSET %s", (page_size, (page-1)*page_size))
+    rows = fetch_all(
+        """
+        SELECT mv.*, p.name AS project_name, tr.display_name AS source_training_display_name
+        FROM model_versions mv
+        LEFT JOIN projects p ON p.id = mv.project_id
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
+        ORDER BY mv.id DESC LIMIT %s OFFSET %s
+        """,
+        (page_size, (page-1)*page_size),
+    )
+    rows = [decorate_model(row) for row in rows]
     return {"items": rows, "total": total["c"] if total else 0, "page": page, "page_size": page_size}
 
 
 @router.get("/{model_id}")
 def get_model(model_id: int) -> dict:
-    row = fetch_one("SELECT * FROM model_versions WHERE id = %s", (model_id,))
+    row = fetch_one(
+        """
+        SELECT mv.*, p.name AS project_name, tr.display_name AS source_training_display_name
+        FROM model_versions mv
+        LEFT JOIN projects p ON p.id = mv.project_id
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
+        WHERE mv.id = %s
+        """,
+        (model_id,),
+    )
     if not row:
         raise HTTPException(status_code=404, detail="model not found")
-    return row
+    return decorate_model(row)
 
 
 @router.put("/{model_id}")
@@ -48,7 +68,7 @@ def update_model(model_id: int, payload: dict) -> dict:
                 "UPDATE training_runs SET notes = %s WHERE id = (SELECT training_run_id FROM model_versions WHERE id = %s)",
                 (notes, model_id),
             )
-    return {"id": model_id, "model_name": name, "notes": notes}
+    return get_model(model_id)
 
 
 @router.get("/{model_id}/artifacts")
@@ -139,6 +159,14 @@ EXPORT_FORMATS = {
     "coreml": {"suffix": ".mlpackage", "label": "CoreML", "description": "Apple 设备部署"},
     "saved_model": {"suffix": "_saved_model", "label": "SavedModel", "description": "TensorFlow SavedModel"},
 }
+
+
+def _next_external_training_run_id(cur) -> int:
+    row = cur.execute(
+        "SELECT MIN(training_run_id) AS min_id FROM model_versions WHERE training_run_id <= 0"
+    ).fetchone()
+    current = row["min_id"] if row and row["min_id"] is not None else 0
+    return int(current) - 1
 
 
 @router.get("/export/formats")
@@ -233,29 +261,48 @@ def _do_export(model_id: int, export_format: str, payload: dict, row: dict):
         new_run_id = f"export_{model_id}_{export_format}_{int(time.time())}"
         new_registry = MODEL_REGISTRY_DIR / row.get("dataset_name", "unknown") / new_run_id
         new_registry.mkdir(parents=True, exist_ok=True)
-        new_best = new_registry / export_dir.name / (exported_path.name if exported_path.is_file() else "model")
+        new_export_dir = new_registry / "exports"
+        new_export_dir.mkdir(parents=True, exist_ok=True)
+        exported_weight_path = ""
+        for file_info in dest_files:
+            src = export_dir / file_info["name"]
+            if not src.exists():
+                continue
+            dst = new_export_dir / file_info["name"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            if not exported_weight_path and dst.suffix.lower() in {".onnx", ".engine", ".torchscript", ".tflite"}:
+                exported_weight_path = str(dst)
+        if not exported_weight_path and dest_files:
+            first = new_export_dir / dest_files[0]["name"]
+            if first.exists():
+                exported_weight_path = str(first)
         # 如果有 best.pt 也拷过来
         best_src = Path(row.get("best_pt_path") or "")
+        copied_pt_path = ""
         if best_src.exists():
-            shutil.copy2(best_src, new_registry / best_src.name)
+            copied_pt_path = str(new_registry / best_src.name)
+            shutil.copy2(best_src, copied_pt_path)
 
+        export_model_name = _safe_model_display_name(row)
         with db() as cur:
+            external_run_id = _next_external_training_run_id(cur)
             cur.execute("""
                 INSERT INTO model_versions(training_run_id, project_id, run_id, dataset_name, dataset_version,
                     base_model, epochs, imgsz, batch, precision, recall, map50, map50_95, best_epoch,
                     best_pt_path, last_pt_path, registry_path, model_name, model_format, notes, is_candidate, is_production, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0, %s) RETURNING id
             """, (
-                0, row.get("project_id"), new_run_id,
+                external_run_id, row.get("project_id"), new_run_id,
                 row.get("dataset_name"), row.get("dataset_version"),
-                row.get('base_model', ''),
+                copied_pt_path or row.get('base_model', ''),
                 row.get("epochs"), imgsz, row.get("batch"),
                 row.get("precision"), row.get("recall"), row.get("map50"), row.get("map50_95"),
                 row.get("best_epoch"),
-                str(new_registry / best_src.name) if best_src.exists() else "",
-                str(new_registry / best_src.name) if best_src.exists() else "",
+                exported_weight_path or copied_pt_path,
+                copied_pt_path,
                 str(new_registry),
-                f"{row.get('model_name') or row.get('run_id')} [{EXPORT_FORMATS[export_format]['label']}]",
+                f"{export_model_name} [{EXPORT_FORMATS[export_format]['label']}]",
                 export_format,
                 f"从 {row.get('run_id')} 导出 {export_format}",
                 now,
@@ -269,6 +316,31 @@ def _do_export(model_id: int, export_format: str, payload: dict, row: dict):
         append_log(log_path, traceback.format_exc())
 
 
+def _safe_model_display_name(row: dict) -> str:
+    raw_name = str(row.get("model_name") or row.get("run_id") or "").replace("\\", "/")
+    if raw_name and "/" not in raw_name:
+        return raw_name
+    dataset = row.get("dataset_name") or "模型"
+    raw_tail = Path(raw_name).name if raw_name else ""
+    if raw_tail:
+        tail = raw_tail.replace(".pt", "").replace(".onnx", "").replace(".engine", "").replace(".yaml", "")
+        if tail and tail.lower() not in {"model", "best", "last"}:
+            return f"{dataset}_{tail}"
+    base = Path(str(row.get("base_model") or "model")).name
+    base = base.replace(".pt", "").replace(".yaml", "") or "model"
+    return f"{dataset}_{base}"
+
+
+def _with_display_model_name(row: dict) -> dict:
+    item = dict(row)
+    name = _safe_model_display_name(item)
+    fmt = str(item.get("model_format") or "").upper()
+    if fmt and fmt != "YOLO" and f"[{fmt}]" not in name:
+        name = f"{name} [{fmt}]"
+    item["display_model_name"] = name
+    return item
+
+
 @router.get("/{model_id}/export/log")
 def get_export_log(model_id: int) -> dict:
     row = fetch_one("SELECT * FROM model_versions WHERE id = %s", (model_id,))
@@ -279,6 +351,60 @@ def get_export_log(model_id: int) -> dict:
     if not log_path.exists():
         return {"log": ""}
     return {"log": log_path.read_text(encoding="utf-8")}
+
+
+@router.get("/{model_id}/export/status")
+def get_export_status(model_id: int) -> dict:
+    row = fetch_one("SELECT * FROM model_versions WHERE id = %s", (model_id,))
+    if not row:
+        raise HTTPException(status_code=404, detail="模型不存在")
+
+    registry_path = Path(row["registry_path"]) if row.get("registry_path") else MODEL_REGISTRY_DIR / f"model_{model_id}"
+    export_dir = registry_path / "exports"
+    log_path = export_dir / "export.log"
+    log_text = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+
+    status = "idle"
+    if log_text:
+        status = "running"
+    if "[ERROR]" in log_text:
+        status = "failed"
+    elif "=== 导出完成 ===" in log_text:
+        status = "completed"
+
+    files = []
+    if export_dir.exists():
+        for file_path in sorted(export_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            files.append({
+                "name": file_path.name,
+                "relative_path": file_path.relative_to(export_dir).as_posix(),
+                "size": file_path.stat().st_size,
+                "url": file_to_url(file_path),
+            })
+
+    exported_model = None
+    if status == "completed":
+        exported = fetch_one(
+            """
+            SELECT * FROM model_versions
+            WHERE run_id LIKE %s
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (f"export_{model_id}_%",),
+        )
+        if exported:
+            exported_model = decorate_model(exported)
+
+    return {
+        "model_id": model_id,
+        "status": status,
+        "log": log_text,
+        "files": files,
+        "exported_model": exported_model,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -320,18 +446,19 @@ async def import_model(
         pass
 
     with db() as cur:
+        external_run_id = _next_external_training_run_id(cur)
         cur.execute(
             """INSERT INTO model_versions(
                 training_run_id, project_id, run_id, dataset_name, dataset_version,
                 base_model, epochs, imgsz, batch,
                 precision, recall, map50, map50_95, best_epoch,
                 best_pt_path, last_pt_path, registry_path,
-                model_name, notes, is_candidate, is_production, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0, %s) RETURNING *""",
+                model_name, model_format, notes, is_candidate, is_production, created_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0, %s) RETURNING *""",
             (
-                0, project_id or None, f"import_{name}", name, "", filename,
+                external_run_id, project_id or None, f"import_{name}", name, "", filename,
                 0, 0, 0, None, None, None, None, None,
-                str(dest_path), "", str(model_dir), name, notes, utc_now(),
+                str(dest_path), "", str(model_dir), name, suffix.lstrip("."), notes, utc_now(),
             ),
         )
         model = dict(cur.fetchone())
@@ -345,4 +472,4 @@ async def import_model(
         except Exception:
             pass
 
-    return {"model": model, "file": {"name": filename, "size": len(content)}, "class_names": class_names}
+    return {"model": decorate_model(model), "file": {"name": filename, "size": len(content)}, "class_names": class_names}

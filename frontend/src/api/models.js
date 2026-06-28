@@ -37,6 +37,10 @@ export function getExportLog(modelId) {
   return get(`/models/${modelId}/export/log`)
 }
 
+export function getExportStatus(modelId) {
+  return get(`/models/${modelId}/export/status`)
+}
+
 export function importModel(formData) {
   return postForm('/models/import', formData)
 }

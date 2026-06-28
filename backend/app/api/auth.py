@@ -1,11 +1,10 @@
-"""简单密码门禁 — 无用户系统，单密码共享。"""
+"""Shared-password auth for the whole app."""
 
 import hashlib
 import hmac
 import json
 import os
 import time
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -15,33 +14,65 @@ from app.core.config import ACCESS_PASSWORD, DATA_DIR
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 TOKEN_FILE = DATA_DIR / "auth_tokens.json"
-TOKEN_TTL = 86400 * 7  # 7 天
-ENABLED = bool(ACCESS_PASSWORD)
+AUTH_CONFIG_FILE = DATA_DIR / "auth_config.json"
+TOKEN_TTL = 86400 * 7
 
-# Token 持久化到文件，重启不丢
 _tokens: dict[str, float] = {}
-
-def _load_tokens():
-    if TOKEN_FILE.exists():
-        try:
-            data = json.loads(TOKEN_FILE.read_text())
-            now = time.time()
-            # 只加载未过期的
-            return {t: exp for t, exp in data.items() if exp > now}
-        except Exception:
-            pass
-    return {}
-
-def _save_tokens():
-    TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOKEN_FILE.write_text(json.dumps(_tokens))
-
-# 启动时加载
-_tokens = _load_tokens()
+_auth_config: dict[str, str | bool] = {}
 
 
 class LoginRequest(BaseModel):
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _default_auth_config() -> dict[str, str | bool]:
+    if not ACCESS_PASSWORD:
+        return {"enabled": False, "password_hash": ""}
+    return {"enabled": True, "password_hash": _hash_password(ACCESS_PASSWORD)}
+
+
+def _load_auth_config() -> dict[str, str | bool]:
+    defaults = _default_auth_config()
+    if not AUTH_CONFIG_FILE.exists():
+        return defaults
+    try:
+        data = json.loads(AUTH_CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return defaults
+    return {
+        "enabled": bool(data.get("enabled", defaults["enabled"])),
+        "password_hash": str(data.get("password_hash") or defaults["password_hash"]),
+    }
+
+
+def _save_auth_config() -> None:
+    AUTH_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    AUTH_CONFIG_FILE.write_text(json.dumps(_auth_config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_tokens() -> dict[str, float]:
+    if not TOKEN_FILE.exists():
+        return {}
+    try:
+        data = json.loads(TOKEN_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    now = time.time()
+    return {token: exp for token, exp in data.items() if exp > now}
+
+
+def _save_tokens() -> None:
+    TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TOKEN_FILE.write_text(json.dumps(_tokens, ensure_ascii=False), encoding="utf-8")
 
 
 def _make_token() -> str:
@@ -50,26 +81,61 @@ def _make_token() -> str:
 
 def _cleanup_tokens() -> None:
     now = time.time()
-    expired = [t for t, exp in _tokens.items() if exp < now]
-    if expired:
-        for t in expired:
-            del _tokens[t]
+    expired = [token for token, exp in _tokens.items() if exp <= now]
+    if not expired:
+        return
+    for token in expired:
+        _tokens.pop(token, None)
+    _save_tokens()
+
+
+def _extract_token(request: Request) -> str:
+    return request.headers.get("X-Auth-Token", "").strip()
+
+
+def _auth_enabled() -> bool:
+    return bool(_auth_config.get("enabled")) and bool(_auth_config.get("password_hash"))
+
+
+def _password_matches(password: str) -> bool:
+    password_hash = str(_auth_config.get("password_hash") or "")
+    if not password_hash:
+        return False
+    return hmac.compare_digest(_hash_password(password), password_hash)
+
+
+def _is_valid_token(token: str) -> bool:
+    if not token:
+        return False
+    exp = _tokens.get(token)
+    if not exp:
+        return False
+    if exp <= time.time():
+        _tokens.pop(token, None)
         _save_tokens()
+        return False
+    return True
+
+
+_tokens = _load_tokens()
+_auth_config = _load_auth_config()
 
 
 @router.get("/status")
 def auth_status() -> dict:
-    """返回门禁是否启用。"""
-    return {"enabled": ENABLED}
+    return {
+        "enabled": _auth_enabled(),
+        "token_ttl": TOKEN_TTL,
+        "password_hint": "共享弱密码，仅防误操作" if _auth_enabled() else "",
+    }
 
 
 @router.post("/login")
 def login(payload: LoginRequest) -> dict:
-    """验证密码，返回 token。"""
-    if not ENABLED:
-        return {"token": "disabled", "message": "门禁未启用"}
+    if not _auth_enabled():
+        return {"token": "disabled", "ttl": 0}
 
-    if not hmac.compare_digest(payload.password, ACCESS_PASSWORD):
+    if not _password_matches(payload.password):
         raise HTTPException(status_code=401, detail="密码错误")
 
     _cleanup_tokens()
@@ -81,37 +147,70 @@ def login(payload: LoginRequest) -> dict:
 
 @router.post("/verify")
 def verify(request: Request) -> dict:
-    """验证 token 是否有效。"""
-    if not ENABLED:
+    if not _auth_enabled():
         return {"valid": True}
 
-    token = request.headers.get("X-Auth-Token", "")
+    token = _extract_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="未登录")
+    if not _is_valid_token(token):
+        raise HTTPException(status_code=401, detail="登录已过期，请重新输入密码")
+    return {"valid": True}
 
-    if token in _tokens and _tokens[token] > time.time():
-        return {"valid": True}
 
-    raise HTTPException(status_code=401, detail="Token 已过期，请重新登录")
+@router.post("/password")
+def change_password(payload: ChangePasswordRequest, request: Request) -> dict:
+    if not _auth_enabled():
+        raise HTTPException(status_code=400, detail="共享密码门禁未启用")
+
+    token = _extract_token(request)
+    if not _is_valid_token(token):
+        raise HTTPException(status_code=401, detail="当前登录已失效，请重新登录")
+
+    if not _password_matches(payload.old_password):
+        raise HTTPException(status_code=401, detail="原密码错误")
+
+    new_password = payload.new_password.strip()
+    if len(new_password) < 3:
+        raise HTTPException(status_code=400, detail="新密码至少 3 位")
+    if len(new_password) > 64:
+        raise HTTPException(status_code=400, detail="新密码过长")
+
+    _auth_config["enabled"] = True
+    _auth_config["password_hash"] = _hash_password(new_password)
+    _save_auth_config()
+
+    _tokens.clear()
+    new_token = _make_token()
+    _tokens[new_token] = time.time() + TOKEN_TTL
+    _save_tokens()
+
+    return {"ok": True, "token": new_token, "ttl": TOKEN_TTL}
+
+
+@router.post("/logout")
+def logout(request: Request) -> dict:
+    if not _auth_enabled():
+        return {"ok": True}
+
+    token = _extract_token(request)
+    if token:
+        _tokens.pop(token, None)
+        _save_tokens()
+    return {"ok": True}
 
 
 def check_auth(request: Request) -> bool:
-    """中间件调用：检查请求是否已认证。返回 True 表示通过。"""
-    if not ENABLED:
+    if not _auth_enabled():
         return True
 
-    # 登录和状态接口不需要认证
     path = request.url.path
     if path.startswith("/api/auth/"):
         return True
-    # 静态资源和文档不需要认证
     if path.startswith(("/images/", "/runs/", "/exports/", "/model_registry/", "/inferences/", "/camera_snapshots/", "/docs", "/openapi", "/redoc", "/favicon")):
         return True
-    if path == "/" or path == "/api/health":
+    if path in {"/", "/api/health"}:
         return True
 
-    token = request.headers.get("X-Auth-Token", "")
-    if token and token in _tokens and _tokens[token] > time.time():
-        return True
-
-    return False
+    _cleanup_tokens()
+    return _is_valid_token(_extract_token(request))

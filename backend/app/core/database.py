@@ -88,6 +88,7 @@ def _run_lightweight_migrations() -> None:
     if DB_BACKEND == "postgres":
         column_statements = [
             "ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS project_id INTEGER",
+            "ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''",
             "ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS dataset_name TEXT DEFAULT ''",
             "ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS report_path TEXT DEFAULT ''",
             "ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT ''",
@@ -161,6 +162,7 @@ def _run_lightweight_migrations() -> None:
             ],
             "training_runs": [
                 ("project_id", "INTEGER"),
+                ("display_name", "TEXT DEFAULT ''"),
                 ("dataset_name", "TEXT DEFAULT ''"),
                 ("report_path", "TEXT DEFAULT ''"),
                 ("summary", "TEXT DEFAULT ''"),

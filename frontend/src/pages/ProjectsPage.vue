@@ -94,11 +94,12 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onActivated, onMounted, reactive, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { createProject, deleteProject, listProjects, updateProject } from '../api/projects.js'
 import { setActiveProjectContext } from '../state/projectContext.js'
+import { shortTime } from '../utils.js'
 
 const projects = ref([])
 const loading = ref(true)
@@ -111,17 +112,19 @@ const editingProject = ref(null)
 const editForm = reactive({ name: '', description: '' })
 const form = reactive({ name: '', description: '', task_type: 'detect' })
 
-onMounted(load)
+onMounted(() => load())
+onActivated(() => load({ silent: true }))
 
-async function load() {
-  loading.value = true
+async function load(options = {}) {
+  const { silent = false } = options
+  if (!silent) loading.value = true
   error.value = ''
   try {
     projects.value = await listProjects()
   } catch (err) {
     error.value = err?.message || '项目加载失败'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -137,7 +140,7 @@ async function submit() {
     showCreate.value = false
     form.name = ''
     form.description = ''
-    await load()
+    await load({ silent: true })
   } catch (err) {
     dialogError.value = err?.message || '创建项目失败'
   }
@@ -152,7 +155,7 @@ function confirmDelete(project) {
     confirmDialog.visible = false
     try {
       await deleteProject(project.id)
-      await load()
+      await load({ silent: true })
     } catch (err) {
       alert(err?.message || '删除项目失败')
     }
@@ -174,7 +177,7 @@ async function saveEdit() {
   try {
     await updateProject(editingProject.value.id, { name: editForm.name.trim(), description: editForm.description.trim() })
     showEdit.value = false
-    await load()
+    await load({ silent: true })
   } catch (err) {
     editError.value = err?.message || '保存失败'
   }
@@ -184,7 +187,4 @@ function fmtMetric(value) {
   return value === null || value === undefined ? '-' : Number(value).toFixed(3)
 }
 
-function shortTime(value) {
-  return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
-}
 </script>

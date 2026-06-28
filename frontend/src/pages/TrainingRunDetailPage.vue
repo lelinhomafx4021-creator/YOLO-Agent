@@ -59,17 +59,19 @@
       <div class="detail-workbench">
         <section class="card section-pad compact-detail-section">
           <div class="detail-grid">
-            <div class="info-item"><span>Run ID</span><strong>{{ detail.run.run_id }}</strong></div>
+            <div class="info-item"><span>训练任务</span><strong>{{ displayTrainingName(detail.run) }}</strong></div>
+            <div class="info-item"><span>技术 ID</span><strong>{{ detail.run.run_id }}</strong></div>
             <div class="info-item"><span>基础模型</span><strong>{{ cleanModel(detail.run.base_model) }}</strong></div>
-            <div class="info-item"><span>数据批次</span><strong>{{ detail.dataset_version?.dataset_name }} / {{ detail.dataset_version?.version }}</strong></div>
+            <div class="info-item"><span>数据批次</span><strong>{{ displayDatasetName(detail.dataset_version) }}</strong></div>
             <div class="info-item"><span>训练轮数</span><strong>{{ detail.run.epochs }}</strong></div>
             <div class="info-item"><span>图像尺寸</span><strong>{{ detail.run.imgsz }}</strong></div>
             <div class="info-item"><span>Batch</span><strong>{{ detail.run.batch }}</strong></div>
             <div class="info-item"><span>优化器</span><strong>{{ detail.run.optimizer || 'auto' }}</strong></div>
             <div class="info-item"><span>学习率 lr0</span><strong>{{ detail.run.lr0 || '默认' }}</strong></div>
             <div class="info-item"><span>设备</span><strong>{{ detail.run.device || '自动' }}</strong></div>
+            <div class="info-item"><span>产出模型</span><strong>{{ detail.model ? displayModelName(detail.model) : '未注册模型' }}</strong></div>
             <div class="info-item"><span>最佳 Epoch</span><strong>{{ detail.model?.best_epoch ?? '-' }}</strong></div>
-            <div class="info-item wide"><span>运行目录</span><strong>{{ detail.run.run_path || '-' }}</strong></div>
+            <div class="info-item wide"><span>运行目录</span><strong :title="detail.run.run_path || ''">{{ displayRunPath(detail.run.run_path) }}</strong></div>
           </div>
 
           <div class="notes-inline" style="margin-bottom:12px">
@@ -221,7 +223,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import LogTerminal from '../components/LogTerminal.vue'
 import { getRunDetail, getProgress, getLog, updateRun } from '../api/training.js'
-import { fmtMetric, statusText } from '../utils.js'
+import { basename, displayDatasetName, displayModelName, displayTrainingName, fmtMetric, statusText } from '../utils.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -280,6 +282,11 @@ function cleanModel(path) {
   const n = String(path).replace(/\\/g, '/')
   const last = n.split('/').pop()
   return last.length > 4 ? last : n
+}
+
+function displayRunPath(path) {
+  if (!path) return '-'
+  return basename(path)
 }
 
 function chartLabel(filename) {

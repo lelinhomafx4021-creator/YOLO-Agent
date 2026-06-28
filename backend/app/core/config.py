@@ -27,8 +27,12 @@ PG_USER = os.getenv("PG_USER", "yolops")
 PG_PASSWORD = os.getenv("PG_PASSWORD", "yolops123")
 PG_DATABASE = os.getenv("PG_DATABASE", "yolops")
 
-# 登录门禁 — 设置 ACCESS_PASSWORD 启用，留空则不启用
-ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "")
+# Login gate:
+# - unset   -> use the weak default password "yolops"
+# - empty   -> disable the gate explicitly
+# - custom  -> use the provided shared password
+_access_password_raw = os.getenv("ACCESS_PASSWORD")
+ACCESS_PASSWORD = "yolops" if _access_password_raw is None else _access_password_raw.strip()
 
 
 def ensure_data_dirs() -> None:
@@ -37,12 +41,7 @@ def ensure_data_dirs() -> None:
 
 
 def resolve_path(stored: str) -> Path:
-    """将存储的路径解析为绝对路径。
-
-    - 相对路径 → 拼接到 DATA_DIR
-    - 绝对路径 → 直接使用（兼容旧数据）
-    - 空路径 → 返回 DATA_DIR
-    """
+    """Resolve a stored path to an absolute path."""
     if not stored:
         return DATA_DIR
     p = Path(stored)
@@ -52,7 +51,7 @@ def resolve_path(stored: str) -> Path:
 
 
 def relative_path(absolute: Path) -> str:
-    """将绝对路径转为相对于 DATA_DIR 的存储路径。"""
+    """Store a path relative to DATA_DIR when possible."""
     try:
         return str(absolute.relative_to(DATA_DIR))
     except ValueError:

@@ -20,9 +20,35 @@ from app.dataset.version_metadata import (
     refresh_dataset_version_metadata,
     write_dataset_yaml,
 )
+from app.presentation import decorate_model, decorate_training_run
 from app.schemas.common import DatasetCreate, DatasetImportRequest
 
 router = APIRouter(prefix="/api", tags=["datasets"])
+
+
+def _safe_model_display_name(row: dict) -> str:
+    raw_name = str(row.get("model_name") or row.get("run_id") or "").replace("\\", "/")
+    if raw_name and "/" not in raw_name:
+        return raw_name
+    dataset = row.get("dataset_name") or "模型"
+    raw_tail = Path(raw_name).name if raw_name else ""
+    if raw_tail:
+        tail = raw_tail.replace(".pt", "").replace(".onnx", "").replace(".engine", "").replace(".yaml", "")
+        if tail and tail.lower() not in {"model", "best", "last"}:
+            return f"{dataset}_{tail}"
+    base = Path(str(row.get("base_model") or "model")).name
+    base = base.replace(".pt", "").replace(".yaml", "") or "model"
+    return f"{dataset}_{base}"
+
+
+def _with_display_model_name(row: dict) -> dict:
+    item = dict(row)
+    name = _safe_model_display_name(item)
+    fmt = str(item.get("model_format") or "").upper()
+    if fmt and fmt != "YOLO" and f"[{fmt}]" not in name:
+        name = f"{name} [{fmt}]"
+    item["display_model_name"] = name
+    return item
 
 
 @router.get("/overview")
@@ -41,10 +67,10 @@ def get_overview() -> dict:
 
     # 单条 SQL 获取最近训练 + 关联信息（消除 Python 循环）
     recent_runs = fetch_all("""
-        SELECT tr.id, tr.run_id, tr.status, tr.finished_at,
+        SELECT tr.id, tr.run_id, tr.display_name, tr.status, tr.finished_at,
                p.name AS project_name,
                COALESCE(d.name, tr.dataset_name, '') AS dataset_name,
-               mv.map50, mv.model_name AS model_name
+               mv.map50, mv.model_name AS model_name, mv.base_model AS model_base_model, mv.model_format AS model_format
         FROM training_runs tr
         LEFT JOIN projects p ON p.id = tr.project_id
         LEFT JOIN dataset_versions dv ON dv.id = tr.dataset_version_id
@@ -55,9 +81,11 @@ def get_overview() -> dict:
 
     # 单条 SQL 获取最近模型
     recent_models = fetch_all("""
-        SELECT mv.id, mv.run_id, mv.model_name, mv.dataset_name, mv.map50_95, mv.is_production,
+        SELECT mv.id, mv.run_id, mv.model_name, mv.dataset_name, mv.base_model, mv.model_format, mv.map50_95, mv.is_production,
+               tr.display_name AS source_training_display_name,
                mv.created_at, p.name AS project_name
         FROM model_versions mv
+        LEFT JOIN training_runs tr ON tr.id = mv.training_run_id
         LEFT JOIN projects p ON p.id = mv.project_id
         ORDER BY mv.id DESC LIMIT 5
     """)
@@ -66,6 +94,8 @@ def get_overview() -> dict:
     version_count = fetch_one("SELECT COUNT(*) AS c FROM dataset_versions")
     training_count = fetch_one("SELECT COUNT(*) AS c FROM training_runs")
     model_count = fetch_one("SELECT COUNT(*) AS c FROM model_versions")
+    recent_runs = [decorate_training_run(row) for row in recent_runs]
+    recent_models = [decorate_model(row) for row in recent_models]
     return {
         "project_count": project_count["c"] if project_count else 0,
         "dataset_count": version_count["c"] if version_count else 0,
@@ -611,30 +641,13 @@ def split_into_independent(version_id: int, payload: dict | None = None) -> dict
 
     # 如果指定了数量，按数量拆分
     if train_count > 0 or val_count > 0 or test_count > 0:
-        # 未指定的按剩余比例分配
+        # 按数量拆分时严格使用用户填写的数量；未填写的 split 保持 0。
+        # 这样可以先拆一小批 reviewed 图片训练小模型，不会把剩余图片自动塞进 val/test。
         specified = train_count + val_count + test_count
-        remaining = max(0, total - specified)
-        if specified == 0:
-            # 全部未指定，用默认比例
-            train_count = max(1, round(total * 0.7))
-            val_count = max(1, round(total * 0.2))
-            test_count = total - train_count - val_count
-        elif specified < total:
-            # 未指定的部分按比例分配剩余
-            unspecified_ratio = 1.0
-            if train_count == 0 and val_count > 0 and test_count > 0:
-                unspecified_ratio = 0.0
-            elif val_count == 0 and train_count > 0 and test_count > 0:
-                unspecified_ratio = 0.0
-            elif test_count == 0 and train_count > 0 and val_count > 0:
-                unspecified_ratio = 0.0
-            # 默认未指定的分给 train
-            if train_count == 0:
-                train_count = remaining
-            elif val_count == 0:
-                val_count = remaining
-            elif test_count == 0:
-                test_count = remaining
+        if specified <= 0:
+            raise HTTPException(status_code=400, detail="split count must be greater than 0")
+        if specified > total:
+            raise HTTPException(status_code=400, detail=f"split count {specified} exceeds available images {total}")
     else:
         # 按比例拆分
         train_ratio = float(payload.get("train_ratio", 0.7))
@@ -642,9 +655,26 @@ def split_into_independent(version_id: int, payload: dict | None = None) -> dict
         test_ratio = float(payload.get("test_ratio", 0.1))
         if train_ratio <= 0 or val_ratio < 0 or test_ratio < 0 or abs((train_ratio + val_ratio + test_ratio) - 1) > 0.01:
             raise HTTPException(status_code=400, detail="ratios must sum to 1")
-        train_count = max(1, round(total * train_ratio))
-        val_count = max(1, round(total * val_ratio))
-        test_count = total - train_count - val_count
+        raw_counts = {
+            "train": total * train_ratio,
+            "val": total * val_ratio,
+            "test": total * test_ratio,
+        }
+        split_counts = {name: int(value) for name, value in raw_counts.items()}
+        remaining = total - sum(split_counts.values())
+        for name, _ in sorted(raw_counts.items(), key=lambda item: item[1] - int(item[1]), reverse=True):
+            if remaining <= 0:
+                break
+            split_counts[name] += 1
+            remaining -= 1
+        if split_counts["train"] <= 0:
+            donor = "val" if split_counts["val"] > split_counts["test"] else "test"
+            if split_counts[donor] > 0:
+                split_counts[donor] -= 1
+                split_counts["train"] = 1
+        train_count = split_counts["train"]
+        val_count = split_counts["val"]
+        test_count = split_counts["test"]
 
     # 截取
     train_rows = rows[:train_count]
@@ -974,7 +1004,8 @@ def update_class_config(version_id: int, payload: dict) -> dict:
     try:
         return update_dataset_version_classes(version_id, raw_class_names)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        status = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 @router.get("/dataset-versions/{version_id}/ai-quality")

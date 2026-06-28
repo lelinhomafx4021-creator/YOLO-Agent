@@ -163,7 +163,7 @@ def collect_artifacts(training_run_id: int) -> dict[str, Any]:
 
     # ---- 8. 向 model_versions 表插入模型版本记录 ----
     # 自动生成模型名称：{数据集名}_{基础模型}_v{序号}
-    base_model_short = run["base_model"].replace(".pt", "").replace(".yaml", "")
+    base_model_short = Path(run["base_model"]).name.replace(".pt", "").replace(".yaml", "")
     model_count = 0
     with db() as cur:
         existing = cur.execute("SELECT COUNT(*) AS c FROM model_versions WHERE dataset_name = %s", (dataset["name"],)).fetchone()

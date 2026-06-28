@@ -25,7 +25,7 @@
       <div class="project-summary-strip dense-strip">
         <div class="project-summary-card">
           <span>最近训练</span>
-          <strong>{{ latestTrainingRun?.run_id || '-' }}</strong>
+          <strong>{{ latestTrainingRun ? displayTrainingName(latestTrainingRun) : '-' }}</strong>
           <small>{{ latestTrainingRun ? `${statusText(latestTrainingRun.status)} / ${latestTrainingRun.epochs} epochs` : '还没有训练记录' }}</small>
         </div>
         <div class="project-summary-card">
@@ -35,7 +35,7 @@
         </div>
         <div class="project-summary-card">
           <span>当前主模型</span>
-          <strong>{{ featuredModel?.model_name || featuredModel?.run_id || '-' }}</strong>
+          <strong>{{ featuredModel ? displayModelName(featuredModel) : '-' }}</strong>
           <small>{{ featuredModel ? modelState(featuredModel) : '还没有模型' }}</small>
         </div>
       </div>
@@ -52,7 +52,7 @@
           <span>训练记录、训练图表和 best.pt 都归属于项目。</span>
         </div>
         <div class="compact-stats project-substats">
-          <div><span>最近训练</span><strong>{{ latestTrainingRun?.run_id || '-' }}</strong></div>
+          <div><span>最近训练</span><strong>{{ latestTrainingRun ? displayTrainingName(latestTrainingRun) : '-' }}</strong></div>
           <div><span>运行中</span><strong>{{ project.training_runs.filter(item => item.status === 'running').length }}</strong></div>
           <div><span>已完成</span><strong>{{ project.training_runs.filter(item => item.status === 'completed').length }}</strong></div>
           <div><span>失败</span><strong>{{ project.training_runs.filter(item => item.status === 'failed').length }}</strong></div>
@@ -83,12 +83,28 @@
                   <option value="yolov8l.pt">YOLOv8l (large)</option>
                   <option value="yolov8x.pt">YOLOv8x (xlarge)</option>
                 </optgroup>
-                <optgroup v-if="project.models.length" label="已有模型（断点续训）">
+                <optgroup label="队列续训">
+                  <option :value="LATEST_PROJECT_MODEL_SENTINEL">{{ latestProjectModelOptionText }}</option>
+                </optgroup>
+                <optgroup v-if="queueTrainingRunOptions.length" label="指定训练任务产物（T8/T9 可绑定 T7）">
+                  <option
+                    v-for="run in queueTrainingRunOptions"
+                    :key="run.id"
+                    :value="`${TRAINING_RUN_MODEL_PREFIX}${run.id}`"
+                  >
+                    使用 {{ displayTrainingName(run) }} 的产出模型（{{ statusText(run.status) }}）
+                  </option>
+                </optgroup>
+                <optgroup v-if="project.models.length" label="已有产出模型（可指定 T7/T8 的 best.pt 继续训练）">
                   <option v-for="m in project.models" :key="m.id" :value="m.best_pt_path">
-                    {{ m.model_name || m.run_id }} (mAP50: {{ fmtMetric(m.map50) }})
+                    {{ displayModelName(m) }} / 来源训练 {{ m.source_training_display_name || m.run_id }} (mAP50: {{ fmtMetric(m.map50) }})
                   </option>
                 </optgroup>
               </select>
+              <small v-if="trainForm.base_model === LATEST_PROJECT_MODEL_SENTINEL" class="helper-text">
+                启动时会解析为本项目最新完成模型；当前参考：{{ latestProjectModelHint }}
+              </small>
+              <small v-else-if="selectedBaseModelHint" class="helper-text">{{ selectedBaseModelHint }}</small>
             </label>
             <label class="form-field"><span>epochs</span><input v-model.number="trainForm.epochs" type="number" min="1" /></label>
             <div class="form-row">
@@ -136,9 +152,11 @@
               <tbody>
                 <tr v-for="run in project.training_runs" :key="run.id">
                   <td>
-                    <RouterLink class="task-name-link" :to="`/training/${run.id}`">{{ run.run_id }}</RouterLink>
+                    <RouterLink class="task-name-link" :to="`/training/${run.id}`">{{ displayTrainingName(run) }}</RouterLink>
+                    <div v-if="run.output_model_display_name || run.output_model_name" class="table-cell-sub">产出模型：{{ run.output_model_display_name || run.output_model_name }}</div>
+                    <div v-else-if="run.status === 'completed'" class="table-cell-sub">未找到注册模型</div>
                   </td>
-                  <td class="muted-text cell-clip">{{ run.dataset_name }}</td>
+                  <td class="muted-text cell-clip">{{ run.dataset_display_name || run.dataset_name }}</td>
                   <td><span class="model-arch-tag model-arch-tag--sm">{{ archLabel(run.base_model) }}</span></td>
                   <td>
                     <span :class="['chip', statusChipClass(run.status)]">{{ statusText(run.status) }}</span>
@@ -191,7 +209,7 @@
               <select v-model.number="evalForm.model_version_id">
                 <option :value="0" disabled>选择模型</option>
                 <option v-for="model in project.models.filter(m => !m.model_format || m.model_format === 'YOLO')" :key="model.id" :value="model.id">
-                  {{ model.model_name || model.run_id }} (mAP50-95: {{ fmtMetric(model.map50_95) }})
+                  {{ displayModelName(model) }} (mAP50-95: {{ fmtMetric(model.map50_95) }})
                 </option>
               </select>
             </label>
@@ -214,7 +232,7 @@
           </div>
 
           <div class="table-card section-pad">
-            <table>
+            <table class="training-table training-table--compact">
               <thead>
                 <tr>
                   <th>Run</th>
@@ -228,8 +246,18 @@
               </thead>
               <tbody>
                 <tr v-for="run in project.evaluation_runs" :key="run.id">
-                  <td>{{ run.run_id }}</td>
-                  <td>{{ run.model_name || run.model_run_id || '-' }}</td>
+                  <td>
+                    <div class="table-cell-stack">
+                      <span class="table-cell-main">{{ run.run_id }}</span>
+                      <span class="table-cell-sub">{{ run.dataset_display_name || run.dataset_name || '未关联数据集' }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="table-cell-stack">
+                      <span class="table-cell-main">{{ run.model_display_name || run.display_model_name || run.model_name || run.model_run_id || '-' }}</span>
+                      <span class="table-cell-sub">{{ run.source_split || 'test' }}</span>
+                    </div>
+                  </td>
                   <td>{{ statusText(run.status) }}</td>
                   <td>{{ fmtMetric(run.map50) }}</td>
                   <td>{{ fmtMetric(run.map50_95) }}</td>
@@ -253,11 +281,11 @@
         <div class="compact-stats project-substats">
           <div><span>生产模型</span><strong>{{ project.models.filter(item => item.is_production).length }}</strong></div>
           <div><span>归档模型</span><strong>{{ project.models.filter(item => !item.is_production).length }}</strong></div>
-          <div><span>当前主模型</span><strong>{{ featuredModel?.run_id || '-' }}</strong></div>
+          <div><span>当前主模型</span><strong>{{ featuredModel ? displayModelName(featuredModel) : '-' }}</strong></div>
           <div><span>模型总数</span><strong>{{ project.models.length }}</strong></div>
         </div>
         <div class="table-card section-pad">
-          <table>
+          <table class="training-table training-table--compact">
             <thead>
               <tr>
                 <th>Run</th>
@@ -271,8 +299,18 @@
             </thead>
             <tbody>
               <tr v-for="model in project.models" :key="model.id">
-                <td>{{ model.model_name || model.run_id }}</td>
-                <td>{{ model.base_model }}<span v-if="model.model_format" class="chip" style="margin-left:4px;font-size:9px">{{ model.model_format.toUpperCase() }}</span></td>
+                <td>
+                  <div class="table-cell-stack">
+                    <span class="table-cell-main">{{ displayModelName(model) }}</span>
+                    <span class="table-cell-sub">{{ model.source_training_display_name || (model.is_production ? '生产模型' : '候选模型') }}</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="table-cell-stack">
+                    <span class="table-cell-main">{{ modelBaseLabel(model) }}</span>
+                    <span v-if="model.model_format" class="table-cell-sub">{{ model.model_format.toUpperCase() }}</span>
+                  </div>
+                </td>
                 <td>{{ fmtMetric(model.map50) }}</td>
                 <td>{{ fmtMetric(model.map50_95) }}</td>
                 <td>{{ modelState(model) }}</td>
@@ -287,41 +325,90 @@
         </div>
       </section>
 
-      <section v-if="activeTab === 'agent'" class="card section-pad compact-detail-section">
-        <div class="card-title">
-          <strong>项目 Agent</strong>
-          <span>围绕这个项目的训练、验证、模型和数据分布做对话分析。</span>
+      <section v-if="activeTab === 'agent'" class="card project-agent-panel">
+        <div class="project-agent-hero">
+          <div class="project-agent-hero-main">
+            <span class="project-agent-eyebrow">项目 Agent</span>
+            <h3>围绕训练、验证、模型与数据集，直接进入分析模式</h3>
+            <p>
+              把最近一次训练、最近一次验证和当前主模型串起来看，比单独读一条记录更快定位问题。
+            </p>
+          </div>
+          <div class="project-agent-launch">
+            <span class="project-agent-launch-label">当前推荐入口</span>
+            <strong>{{ agentHeadline }}</strong>
+            <button class="primary-action" @click="openAgentWorkspace">打开项目对话</button>
+          </div>
         </div>
-        <div class="detail-grid">
-          <div class="info-item"><span>可读数据批次</span><strong>{{ project.datasets.length }}</strong></div>
-          <div class="info-item"><span>可读训练记录</span><strong>{{ project.training_runs.length }}</strong></div>
-          <div class="info-item"><span>可读验证记录</span><strong>{{ project.evaluation_runs.length }}</strong></div>
-          <div class="info-item"><span>可读模型记录</span><strong>{{ project.models.length }}</strong></div>
+
+        <div class="project-agent-stats">
+          <div class="project-agent-stat">
+            <span>可读数据批次</span>
+            <strong>{{ project.datasets.length }}</strong>
+            <small>数据集与版本</small>
+          </div>
+          <div class="project-agent-stat">
+            <span>可读训练记录</span>
+            <strong>{{ project.training_runs.length }}</strong>
+            <small>最近训练可直接分析</small>
+          </div>
+          <div class="project-agent-stat">
+            <span>可读验证记录</span>
+            <strong>{{ project.evaluation_runs.length }}</strong>
+            <small>优先串联最近验证结果</small>
+          </div>
+          <div class="project-agent-stat">
+            <span>可读模型记录</span>
+            <strong>{{ project.models.length }}</strong>
+            <small>包含生产与候选模型</small>
+          </div>
         </div>
+
         <div class="project-agent-grid">
-          <div class="project-context-list">
-            <div class="project-context-item">
-              <span>最近训练关注点</span>
-              <strong>{{ latestTrainingRun ? `${latestTrainingRun.run_id} / ${statusText(latestTrainingRun.status)}` : '暂无训练记录' }}</strong>
+          <div class="project-agent-block">
+            <div class="project-agent-block-head">
+              <strong>最新信号</strong>
+              <span>先看最值得分析的三条上下文</span>
             </div>
-            <div class="project-context-item">
-              <span>最近验证关注点</span>
-              <strong>{{ latestEvaluationRun ? `${latestEvaluationRun.run_id} / mAP50-95 ${fmtMetric(latestEvaluationRun.map50_95)}` : '暂无验证记录' }}</strong>
-            </div>
-            <div class="project-context-item">
-              <span>当前模型关注点</span>
-              <strong>{{ featuredModel ? `${featuredModel.run_id} / ${modelState(featuredModel)}` : '暂无模型记录' }}</strong>
+            <div class="project-agent-signal-list">
+              <div class="project-agent-signal">
+                <span class="project-agent-signal-label">最近训练</span>
+                <strong>{{ latestTrainingRun ? displayTrainingName(latestTrainingRun) : '暂无训练记录' }}</strong>
+                <small>{{ latestTrainingRun ? `${statusText(latestTrainingRun.status)} · ${latestTrainingRun.epochs} epochs` : '需要先发起训练' }}</small>
+              </div>
+              <div class="project-agent-signal">
+                <span class="project-agent-signal-label">最近验证</span>
+                <strong>{{ latestEvaluationRun?.run_id || '暂无验证记录' }}</strong>
+                <small>{{ latestEvaluationRun ? `mAP50-95 ${fmtMetric(latestEvaluationRun.map50_95)}` : '需要先发起验证' }}</small>
+              </div>
+              <div class="project-agent-signal">
+                <span class="project-agent-signal-label">当前主模型</span>
+                <strong>{{ featuredModel ? displayModelName(featuredModel) : '暂无模型记录' }}</strong>
+                <small>{{ featuredModel ? modelState(featuredModel) : '训练完成后会自动沉淀模型' }}</small>
+              </div>
             </div>
           </div>
-          <div class="project-context-list project-prompt-list">
-            <div v-for="prompt in quickAgentPrompts" :key="prompt" class="project-context-item">
-              <span>推荐分析主题</span>
-              <strong>{{ prompt }}</strong>
+
+          <div class="project-agent-block">
+            <div class="project-agent-block-head">
+              <strong>推荐分析主题</strong>
+              <span>直接带着问题进入对话</span>
+            </div>
+            <div class="project-agent-prompt-list">
+              <button
+                v-for="prompt in quickAgentPrompts"
+                :key="prompt"
+                class="project-agent-prompt"
+                @click="openAgentPrompt(prompt)"
+              >
+                <strong>{{ prompt }}</strong>
+                <span>进入 Agent 分析</span>
+              </button>
             </div>
           </div>
         </div>
-        <div class="button-row section-actions">
-          <RouterLink class="primary-action" to="/agent">打开项目对话</RouterLink>
+
+        <div class="project-agent-footer">
           <RouterLink v-if="latestTrainingRun" class="secondary-action" :to="`/training/${latestTrainingRun.id}`">查看最近训练</RouterLink>
           <RouterLink v-if="latestEvaluationRun" class="secondary-action" :to="`/evaluations/${latestEvaluationRun.id}`">查看最近验证</RouterLink>
           <RouterLink v-if="featuredModel" class="secondary-action" to="/registry">查看模型仓库</RouterLink>
@@ -333,7 +420,7 @@
 
 <script setup>
 import { computed, onActivated, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { listVersions } from '../api/datasets.js'
 import { createProjectEvaluationRun, createProjectTrainingRun, getProject } from '../api/projects.js'
 import { deleteRun, updateRun } from '../api/training.js'
@@ -341,10 +428,11 @@ import { updateModel } from '../api/models.js'
 import { getRuntime } from '../api/system.js'
 import { deleteModel as deleteModelApi } from '../api/models.js'
 import { setActiveProjectContext } from '../state/projectContext.js'
-import { fmtMetric, formatError, shortTime, statusText } from '../utils.js'
+import { displayModelName, displayTrainingName, fmtMetric, formatError, shortTime, statusText } from '../utils.js'
 import { del } from '../api/client.js'
 
 const route = useRoute()
+const router = useRouter()
 const project = ref(null)
 const versions = ref([])
 const gpuList = ref([])
@@ -360,6 +448,9 @@ const tabs = [
   { key: 'models', label: '模型' },
   { key: 'agent', label: 'Agent' },
 ]
+
+const LATEST_PROJECT_MODEL_SENTINEL = '__latest_project_model__'
+const TRAINING_RUN_MODEL_PREFIX = '__training_run_model__:'
 
 const trainForm = reactive({
   dataset_version_id: 0,
@@ -385,6 +476,50 @@ const evalForm = reactive({
 
 const latestTrainingRun = computed(() => project.value?.training_runs?.[0] || null)
 const latestEvaluationRun = computed(() => project.value?.evaluation_runs?.[0] || null)
+const latestCompletedProjectModel = computed(() => {
+  const rows = project.value?.models || []
+  return rows.find(item => {
+    const format = String(item.model_format || 'YOLO').toUpperCase()
+    return (!format || format === 'YOLO') &&
+      (item.best_pt_path || item.last_pt_path) &&
+      (!item.training_status || item.training_status === 'completed')
+  }) || null
+})
+const latestProjectModelOptionText = computed(() => {
+  const model = latestCompletedProjectModel.value
+  if (!model) return '使用本项目最新完成模型（启动时解析，当前暂无已完成模型）'
+  return `使用最新完成模型：${displayModelName(model)} / ${model.source_training_display_name || model.run_id || '未关联训练'}`
+})
+const latestProjectModelHint = computed(() => {
+  const model = latestCompletedProjectModel.value
+  const latestRunText = latestTrainingRun.value
+    ? `；最近训练任务：${latestTrainingRun.value.run_id}（${statusText(latestTrainingRun.value.status)}）`
+    : ''
+  if (!model) return `暂无已完成模型。第一个任务请选择官方预训练模型，后续排队任务再选这里${latestRunText}。`
+  const score = model.map50 != null ? `，mAP50 ${fmtMetric(model.map50)}` : ''
+  return `${displayModelName(model)}，来源训练 ${model.source_training_display_name || model.run_id || '-'}${score}${latestRunText}`
+})
+const selectedBaseModelHint = computed(() => {
+  if (String(trainForm.base_model || '').startsWith(TRAINING_RUN_MODEL_PREFIX)) {
+    const runId = Number(String(trainForm.base_model).slice(TRAINING_RUN_MODEL_PREFIX.length))
+    const run = (project.value?.training_runs || []).find(item => Number(item.id) === runId)
+    if (!run) return ''
+    return `队列启动时会使用训练任务 ${displayTrainingName(run)} 产出的模型；如果该任务失败，当前任务会失败并提示原因。`
+  }
+  const selected = (project.value?.models || []).find(item => {
+    const weight = item.best_pt_path || item.last_pt_path || ''
+    return weight && weight === trainForm.base_model
+  })
+  if (!selected) return ''
+  const score = selected.map50 != null ? `，mAP50 ${fmtMetric(selected.map50)}` : ''
+  return `将使用已产出模型继续训练：${displayModelName(selected)}，来源任务 ${selected.source_training_display_name || selected.run_id || '-'}${score}`
+})
+const queueTrainingRunOptions = computed(() => {
+  return (project.value?.training_runs || []).filter(run => {
+    if (run.status === 'failed') return false
+    return run.status === 'created' || run.status === 'running' || run.status === 'completed'
+  })
+})
 const featuredModel = computed(() => {
   const rows = project.value?.models || []
   return rows.find(item => item.is_production) || rows.find(item => item.is_candidate) || rows[0] || null
@@ -418,8 +553,14 @@ const quickAgentPrompts = [
   '对比当前主模型和最近训练的 best.pt，判断是否应该晋升。',
 ]
 
-onMounted(load)
-onActivated(load)  // keep-alive 切回时自动刷新
+const agentHeadline = computed(() => {
+  if (latestEvaluationRun.value) return `优先分析 ${latestEvaluationRun.value.run_id}`
+  if (latestTrainingRun.value) return `优先分析 ${latestTrainingRun.value.run_id}`
+  return '先进入 Agent 建立项目上下文'
+})
+
+onMounted(() => load())
+onActivated(() => load({ silent: true }))  // keep-alive 切回时静默刷新
 
 async function loadGpu() {
   try {
@@ -428,8 +569,9 @@ async function loadGpu() {
   } catch { gpuList.value = [] }
 }
 
-async function load() {
-  loading.value = true
+async function load(options = {}) {
+  const { silent = false } = options
+  if (!silent) loading.value = true
   error.value = ''
   try {
     const [projectData, verResp] = await Promise.all([getProject(route.params.id), listVersions(), loadGpu()])
@@ -462,7 +604,7 @@ async function load() {
   } catch (err) {
     error.value = formatError(err, '项目加载失败')
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -478,7 +620,7 @@ async function startTraining() {
     await createProjectTrainingRun(project.value.id, { ...trainForm, run_name: trainForm.run_name || null })
     actionMsg.value = '训练任务已创建。'
     activeTab.value = 'training'
-    await load()
+    await load({ silent: true })
   } catch (err) {
     actionError.value = formatError(err, '训练启动失败')
   }
@@ -496,7 +638,7 @@ async function startEvaluation() {
     await createProjectEvaluationRun(project.value.id, { ...evalForm })
     actionMsg.value = '验证任务已创建。'
     activeTab.value = 'evaluation'
-    await load()
+    await load({ silent: true })
   } catch (err) {
     actionError.value = formatError(err, '验证启动失败')
   }
@@ -518,19 +660,33 @@ async function saveModelNotes(run, value) {
 
 async function deleteTrainingRun(run) {
   if (!confirm(`确认删除训练「${run.run_id}」？关联的模型也会被删除。`)) return
-  try { await deleteRun(run.id); await load() } catch (e) { alert(e?.message || '删除失败') }
+  try { await deleteRun(run.id); await load({ silent: true }) } catch (e) { alert(e?.message || '删除失败') }
 }
 async function deleteEvalRun(run) {
   if (!confirm(`确认删除验证「${run.run_id}」？`)) return
-  try { await del(`/evaluation-runs/${run.id}`); await load() } catch (e) { alert(e?.message || '删除失败') }
+  try { await del(`/evaluation-runs/${run.id}`); await load({ silent: true }) } catch (e) { alert(e?.message || '删除失败') }
 }
 async function deleteModel(model) {
   if (!confirm(`确认删除模型「${model.run_id}」？`)) return
-  try { await deleteModelApi(model.id); await load() } catch (e) { alert(e?.message || '删除失败') }
+  try { await deleteModelApi(model.id); await load({ silent: true }) } catch (e) { alert(e?.message || '删除失败') }
+}
+
+function shortPath(path) {
+  if (!path) return ''
+  const n = String(path).replace(/\\/g, '/')
+  return n.split('/').pop() || n
+}
+
+function modelBaseLabel(model) {
+  const base = shortPath(model?.base_model || '')
+  if (!base) return '-'
+  return base.replace(/\.(pt|yaml)$/i, '')
 }
 
 function archLabel(path) {
   if (!path) return '-'
+  if (path === LATEST_PROJECT_MODEL_SENTINEL) return '最新项目模型'
+  if (String(path).startsWith(TRAINING_RUN_MODEL_PREFIX)) return '指定任务产物'
   const n = String(path).replace(/\\/g, '/').split('/').pop().toLowerCase()
   const archMap = {
     'yolo11n.pt': 'YOLO11n', 'yolo11s.pt': 'YOLO11s', 'yolo11m.pt': 'YOLO11m', 'yolo11l.pt': 'YOLO11l', 'yolo11x.pt': 'YOLO11x',
@@ -554,6 +710,16 @@ function statusChipClass(status) {
 
 function modelState(model) {
   return model?.is_production ? '生产' : '归档'
+}
+
+function openAgentWorkspace() {
+  if (project.value) setActiveProjectContext(project.value)
+  router.push('/agent')
+}
+
+function openAgentPrompt(prompt) {
+  if (project.value) setActiveProjectContext(project.value)
+  router.push({ path: '/agent', query: { q: prompt } })
 }
 
 </script>

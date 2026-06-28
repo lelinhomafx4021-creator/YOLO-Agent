@@ -12,7 +12,7 @@
       </div>
       <select v-model="selectedRunId" @change="loadReport">
         <option :value="null" disabled>{{ reportType === 'training' ? '选择训练任务' : '选择评估任务' }}</option>
-        <option v-for="r in selectableRuns" :key="r.id" :value="r.id">{{ r.run_id }}</option>
+        <option v-for="r in selectableRuns" :key="r.id" :value="r.id">{{ reportType === 'training' ? displayTrainingName(r) : (r.run_id || r.id) }}</option>
       </select>
       <button class="secondary-action" @click="regenerate" :disabled="!selectedRunId"><AppIcon name="refresh" /> 重新生成</button>
     </PageHeader>
@@ -58,6 +58,7 @@ import ActionItem from '../components/ActionItem.vue'
 import { listRuns } from '../api/training'
 import { getReport, regenerateReport, getEvaluationReport, regenerateEvaluationReport } from '../api/reports'
 import { listModels } from '../api/models'
+import { displayTrainingName } from '../utils.js'
 
 const loading = ref(false)
 const reportType = ref('training')  // 'training' | 'evaluation'
